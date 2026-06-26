@@ -11,9 +11,10 @@ No ``from __future__ import annotations`` — Dagster introspects the annotation
 
 from datetime import date
 
-from dagster import AssetKey, MaterializeResult, MetadataValue, asset
+from dagster import AssetKey, MaterializeResult, asset
 
 from ..config import settings
+from ..football.asset_results import to_materialize_result
 from ..football.discovery import DiscoveredFile, discover_files
 from ..football.http_client import ThrottledFetcher, ThrottledHttpClient
 from ..football.ingest import IngestionReport, ingest_family
@@ -53,27 +54,6 @@ def run_main_backfill(
     )
 
 
-def _to_result(report: IngestionReport, context, label: str) -> MaterializeResult:
-    valid = sum(r.valid_count for r in report.written)
-    reject = sum(r.reject_count for r in report.written)
-    metadata = {
-        "files_written": MetadataValue.int(len(report.written)),
-        "files_skipped": MetadataValue.int(len(report.skipped)),
-        "files_failed": MetadataValue.int(len(report.failed)),
-        "valid_rows": MetadataValue.int(valid),
-        "reject_rows": MetadataValue.int(reject),
-    }
-    if report.failed:
-        failed_urls = [r.file.url for r in report.failed]
-        context.log.error("%s: %d file(s) failed: %s", label, len(failed_urls), failed_urls[:20])
-        # Surface in run status: successful Parquet files persist, but the run fails.
-        raise RuntimeError(
-            f"{label}: {len(failed_urls)} file(s) failed to ingest; see logs. "
-            f"first: {failed_urls[:5]}"
-        )
-    return MaterializeResult(metadata=metadata)
-
-
 @asset(
     key=AssetKey(["football_main"]),
     group_name="bronze",
@@ -83,4 +63,4 @@ def _to_result(report: IngestionReport, context, label: str) -> MaterializeResul
 def football_main(context, football_http: ThrottledHttpClient) -> MaterializeResult:
     fetcher = football_http.build_fetcher()
     report = run_main_backfill(fetcher, date.today(), log=context.log)
-    return _to_result(report, context, "football_main")
+    return to_materialize_result(report, context.log, "football_main")
