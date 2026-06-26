@@ -48,8 +48,15 @@ models appear as Dagster assets.
 │   ├── models/                 # Data contracts (no orchestration, no I/O)
 │   │   ├── schemas.py          #   Pydantic v2 — per-record edge validation
 │   │   └── validation.py       #   Pandera — frame-level validation
-│   └── assets/                 # Dagster assets, one module per medallion layer
-│       ├── bronze.py           #   raw_users: the ONLY network edge
+│   ├── football/               # football-data.co.uk bronze source (Epic #1)
+│   │   ├── registry.py         #   typed league whitelist (main + extra families)
+│   │   ├── discovery.py        #   requests + regex whitelist-driven link discovery
+│   │   ├── http_client.py      #   throttled, cache-aware HTTP client resource
+│   │   └── season.py           #   current-season vs historical classification
+│   └── assets/                 # Dagster assets, one module per medallion layer / source
+│       ├── bronze.py           #   raw_users: a network edge (bronze layer)
+│       ├── football_main.py    #   main family (mmz4281/<season>/<div>) bronze ingestor
+│       ├── football_extra.py   #   extra family (new/<CODE>) bronze ingestor
 │       ├── dbt.py              #   dbt_models + BronzeAwareTranslator (silver + gold)
 │       └── gold.py             #   publish_gold_parquet: consumes the gold Parquet
 │
@@ -82,17 +89,21 @@ downstream; a layer never imports or reads from a layer above it.**
 
 | Layer | Owned by | Reads | Writes | Validation gate |
 | --- | --- | --- | --- | --- |
-| **Bronze** | `assets/bronze.py` | Source API (HTTP) | `data/bronze/*.parquet` | Pydantic (record) → Pandera (frame) |
+| **Bronze** | `assets/bronze.py`, `assets/football_*.py` (+ `football/` helpers) | Source API / website (HTTP) | `data/bronze/**/*.parquet` | Pydantic (record) → Pandera (frame) |
 | **Silver** | `dbt/.../models/silver` | bronze Parquet (external source) | DuckDB view | dbt tests |
 | **Gold** | `dbt/.../models/gold` | silver | DuckDB table + `data/gold/*.parquet` | dbt tests |
 | **Publish** | `assets/gold.py` | gold Parquet **file** | run metadata + OTel span | — |
 
 Hard rules that define the architecture:
 
-1. **The network edge lives only in `assets/bronze.py`.** It is the single
-   asset that touches the outside world. No other module may make outbound HTTP
-   calls. New ingest sources are new bronze assets, not network calls bolted
-   onto downstream code.
+1. **The network edge lives only in the bronze layer.** The bronze layer is the
+   sole part of the system that touches the outside world: the ingest assets
+   under `assets/` (`bronze.py`, `football_main.py`, `football_extra.py`) plus
+   their discovery/HTTP helpers (the `football/` package — link discovery and the
+   shared throttled HTTP client). No module outside the bronze layer may make
+   outbound HTTP calls. New ingest sources are new bronze assets (and, if needed,
+   their own source helper package), never network calls bolted onto silver/gold/
+   publish code.
 2. **Validate at the boundary, before data lands.** Every record entering the
    system is parsed by a Pydantic model (`models/schemas.py`); the assembled
    frame is then checked by a Pandera schema (`models/validation.py`) before it
@@ -119,9 +130,13 @@ definitions.py  ──imports──▶  assets/*  ──imports──▶  models
   `assets/` or `definitions.py`. They are pure contracts/config and must stay
   that way so they are trivially reusable and testable.
 - `otel.py` depends only on `config.py`.
-- `assets/*` modules depend on `models/`, `config`, `otel` — **never on each
-  other**. The bronze→silver→gold ordering is expressed through Dagster asset
-  keys (and the `BronzeAwareTranslator`), not through Python imports.
+- `assets/*` modules depend on `models/`, `config`, `otel`, and source helper
+  packages like `football/` — **never on each other**. The bronze→silver→gold
+  ordering is expressed through Dagster asset keys (and the `BronzeAwareTranslator`),
+  not through Python imports.
+- `football/` is a bronze-layer **source helper package**: `registry`/`season` are
+  leaves (no I/O); `discovery` and `http_client` own this source's network edge.
+  It imports `config` (and `season`), never `assets/` or `definitions.py`.
 
 ---
 
@@ -135,6 +150,12 @@ definitions.py  ──imports──▶  assets/*  ──imports──▶  models
 | `models/schemas.py` | Pydantic contracts for incoming payloads + flattening | (pydantic) | do I/O or orchestration |
 | `models/validation.py` | Pandera frame contracts | (pandera) | do I/O or orchestration |
 | `assets/bronze.py` | Ingest + validate + land bronze Parquet | `models`, `config`, `otel` | depend on other assets |
+| `football/registry.py` | Typed league whitelist (11 main + 16 extra), family-tagged; single source of truth for discovery | (stdlib) | do I/O, network, or hold ad-hoc URLs elsewhere |
+| `football/discovery.py` | Whitelist-driven `requests`+regex link discovery → deterministic, de-duped, family-tagged CSV URLs | `registry`, `http_client`, `config` | use BeautifulSoup; emit off-list/noise links |
+| `football/http_client.py` | Shared `ConfigurableResource`: 0.4 s pacing, within-run cache (historical only), artifact-presence skip-existing, bounded polite retry | `config`, `season` | be used by any non-bronze code |
+| `football/season.py` | Classify a file current-season vs historical from its season token + injected run date | (stdlib) | read a hidden global clock |
+| `assets/football_main.py` | Main-family (latin-1) bronze ingestor; one Parquet per `mmz4281` file | `football`, `models`, `config`, `otel` | depend on other assets |
+| `assets/football_extra.py` | Extra-family (utf-8-sig) bronze ingestor; one Parquet per `new/<CODE>` file | `football`, `models`, `config`, `otel` | depend on other assets |
 | `assets/dbt.py` | Run/test dbt; map dbt source→bronze asset key for lineage | (dagster-dbt) | reimplement transformations in Python |
 | `assets/gold.py` | Read published gold Parquet; attach metadata + span | `config`, `otel` | open the warehouse read-write |
 
