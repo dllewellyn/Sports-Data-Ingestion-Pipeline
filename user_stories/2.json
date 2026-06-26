@@ -1,0 +1,76 @@
+{
+  "fields": {
+    "Microsoft.VSTS.Common.Priority": 2,
+    "Microsoft.VSTS.Common.StateChangeDate": "2026-06-26T14:23:54.723Z",
+    "System.AreaId": 12,
+    "System.AreaLevel1": "TestProject123",
+    "System.AreaPath": "TestProject123",
+    "System.AuthorizedAs": {
+      "_links": {
+        "avatar": {
+          "href": "https://dev.azure.com/danielnllewellyn/_apis/GraphProfile/MemberAvatars/msa.MTE3OTY3NGItMjFkNC03MzBkLTg0NzMtN2QyMWE2YmFkYWJl"
+        }
+      },
+      "descriptor": "msa.MTE3OTY3NGItMjFkNC03MzBkLTg0NzMtN2QyMWE2YmFkYWJl",
+      "displayName": "Daniel Llewellyn",
+      "id": "1179674b-21d4-630d-8473-7d21a6badabe",
+      "imageUrl": "https://dev.azure.com/danielnllewellyn/_apis/GraphProfile/MemberAvatars/msa.MTE3OTY3NGItMjFkNC03MzBkLTg0NzMtN2QyMWE2YmFkYWJl",
+      "uniqueName": "danieln.llewellyn@gmail.com",
+      "url": "https://spsproduks1.vssps.visualstudio.com/A3fc7e3c6-6eda-4604-99ac-a63ab505c030/_apis/Identities/1179674b-21d4-630d-8473-7d21a6badabe"
+    },
+    "System.AuthorizedDate": "2026-06-26T14:23:54.723Z",
+    "System.BoardColumn": "To Do",
+    "System.BoardColumnDone": false,
+    "System.ChangedBy": {
+      "_links": {
+        "avatar": {
+          "href": "https://dev.azure.com/danielnllewellyn/_apis/GraphProfile/MemberAvatars/msa.MTE3OTY3NGItMjFkNC03MzBkLTg0NzMtN2QyMWE2YmFkYWJl"
+        }
+      },
+      "descriptor": "msa.MTE3OTY3NGItMjFkNC03MzBkLTg0NzMtN2QyMWE2YmFkYWJl",
+      "displayName": "Daniel Llewellyn",
+      "id": "1179674b-21d4-630d-8473-7d21a6badabe",
+      "imageUrl": "https://dev.azure.com/danielnllewellyn/_apis/GraphProfile/MemberAvatars/msa.MTE3OTY3NGItMjFkNC03MzBkLTg0NzMtN2QyMWE2YmFkYWJl",
+      "uniqueName": "danieln.llewellyn@gmail.com",
+      "url": "https://spsproduks1.vssps.visualstudio.com/A3fc7e3c6-6eda-4604-99ac-a63ab505c030/_apis/Identities/1179674b-21d4-630d-8473-7d21a6badabe"
+    },
+    "System.ChangedDate": "2026-06-26T14:23:54.723Z",
+    "System.CommentCount": 0,
+    "System.CreatedBy": {
+      "_links": {
+        "avatar": {
+          "href": "https://dev.azure.com/danielnllewellyn/_apis/GraphProfile/MemberAvatars/msa.MTE3OTY3NGItMjFkNC03MzBkLTg0NzMtN2QyMWE2YmFkYWJl"
+        }
+      },
+      "descriptor": "msa.MTE3OTY3NGItMjFkNC03MzBkLTg0NzMtN2QyMWE2YmFkYWJl",
+      "displayName": "Daniel Llewellyn",
+      "id": "1179674b-21d4-630d-8473-7d21a6badabe",
+      "imageUrl": "https://dev.azure.com/danielnllewellyn/_apis/GraphProfile/MemberAvatars/msa.MTE3OTY3NGItMjFkNC03MzBkLTg0NzMtN2QyMWE2YmFkYWJl",
+      "uniqueName": "danieln.llewellyn@gmail.com",
+      "url": "https://spsproduks1.vssps.visualstudio.com/A3fc7e3c6-6eda-4604-99ac-a63ab505c030/_apis/Identities/1179674b-21d4-630d-8473-7d21a6badabe"
+    },
+    "System.CreatedDate": "2026-06-26T14:23:54.723Z",
+    "System.Id": 2,
+    "System.IterationId": 9,
+    "System.IterationLevel1": "TestProject123",
+    "System.IterationPath": "TestProject123",
+    "System.NodeName": "TestProject123",
+    "System.PersonId": 123904872,
+    "System.Reason": "Added to backlog",
+    "System.Rev": 1,
+    "System.RevisedDate": "9999-01-01T00:00:00Z",
+    "System.State": "To Do",
+    "System.TeamProject": "TestProject123",
+    "System.Title": "Ingest https://www.football-data.co.uk/data.php",
+    "System.Watermark": 2,
+    "System.WorkItemType": "Issue",
+    "WEF_727950E7B3484572A3154FADCCBA0EFC_Kanban.Column": "To Do",
+    "WEF_727950E7B3484572A3154FADCCBA0EFC_Kanban.Column.Done": false,
+    "WEF_727950E7B3484572A3154FADCCBA0EFC_System.ExtensionMarker": true
+  },
+  "id": 2,
+  "multilineFieldsFormat": {},
+  "relations": null,
+  "rev": 1,
+  "url": "https://dev.azure.com/danielnllewellyn/dcf8a318-d965-472b-a405-00aa82fc912f/_apis/wit/workItems/2"
+}

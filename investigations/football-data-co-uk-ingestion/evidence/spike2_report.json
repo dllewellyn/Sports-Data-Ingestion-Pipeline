@@ -1,0 +1,231 @@
+{
+  "files": {
+    "mmz4281/9394/E0.csv": {
+      "family": "main",
+      "rows": 552,
+      "n_cols": 7,
+      "cols_head": [
+        "Div",
+        "Date",
+        "HomeTeam",
+        "AwayTeam",
+        "FTHG",
+        "FTAG",
+        "FTR"
+      ],
+      "core_valid_rows": 462
+    },
+    "mmz4281/0001/E0.csv": {
+      "family": "main",
+      "rows": 380,
+      "n_cols": 45,
+      "cols_head": [
+        "Div",
+        "Date",
+        "HomeTeam",
+        "AwayTeam",
+        "FTHG",
+        "FTAG",
+        "FTR",
+        "HTHG",
+        "HTAG",
+        "HTR",
+        "Attendance",
+        "Referee"
+      ],
+      "core_valid_rows": 380
+    },
+    "mmz4281/1011/E0.csv": {
+      "family": "main",
+      "rows": 380,
+      "n_cols": 71,
+      "cols_head": [
+        "Div",
+        "Date",
+        "HomeTeam",
+        "AwayTeam",
+        "FTHG",
+        "FTAG",
+        "FTR",
+        "HTHG",
+        "HTAG",
+        "HTR",
+        "Referee",
+        "HS"
+      ],
+      "core_valid_rows": 380
+    },
+    "mmz4281/2324/E0.csv": {
+      "family": "main",
+      "rows": 380,
+      "n_cols": 106,
+      "cols_head": [
+        "Div",
+        "Date",
+        "Time",
+        "HomeTeam",
+        "AwayTeam",
+        "FTHG",
+        "FTAG",
+        "FTR",
+        "HTHG",
+        "HTAG",
+        "HTR",
+        "Referee"
+      ],
+      "core_valid_rows": 380
+    },
+    "mmz4281/2324/E1.csv": {
+      "family": "main",
+      "rows": 552,
+      "n_cols": 106,
+      "cols_head": [
+        "Div",
+        "Date",
+        "Time",
+        "HomeTeam",
+        "AwayTeam",
+        "FTHG",
+        "FTAG",
+        "FTR",
+        "HTHG",
+        "HTAG",
+        "HTR",
+        "Referee"
+      ],
+      "core_valid_rows": 552
+    },
+    "mmz4281/2324/I1.csv": {
+      "family": "main",
+      "rows": 380,
+      "n_cols": 105,
+      "cols_head": [
+        "Div",
+        "Date",
+        "Time",
+        "HomeTeam",
+        "AwayTeam",
+        "FTHG",
+        "FTAG",
+        "FTR",
+        "HTHG",
+        "HTAG",
+        "HTR",
+        "HS"
+      ],
+      "core_valid_rows": 380
+    },
+    "mmz4281/2324/SC0.csv": {
+      "family": "main",
+      "rows": 228,
+      "n_cols": 106,
+      "cols_head": [
+        "Div",
+        "Date",
+        "Time",
+        "HomeTeam",
+        "AwayTeam",
+        "FTHG",
+        "FTAG",
+        "FTR",
+        "HTHG",
+        "HTAG",
+        "HTR",
+        "Referee"
+      ],
+      "core_valid_rows": 228
+    },
+    "new/ARG.csv": {
+      "family": "extra",
+      "rows": 6235,
+      "n_cols": 25,
+      "cols_head": [
+        "\u00ef\u00bb\u00bfCountry",
+        "League",
+        "Season",
+        "Date",
+        "Time",
+        "Home",
+        "Away",
+        "HG",
+        "AG",
+        "Res",
+        "PSCH",
+        "PSCD"
+      ]
+    },
+    "new/USA.csv": {
+      "family": "extra",
+      "rows": 6034,
+      "n_cols": 25,
+      "cols_head": [
+        "\u00ef\u00bb\u00bfCountry",
+        "League",
+        "Season",
+        "Date",
+        "Time",
+        "Home",
+        "Away",
+        "HG",
+        "AG",
+        "Res",
+        "PSCH",
+        "PSCD"
+      ]
+    }
+  },
+  "families": {
+    "main": {
+      "files_sampled": 7,
+      "union_cols": 146,
+      "cols_in_every_file": [
+        "AwayTeam",
+        "Date",
+        "Div",
+        "FTAG",
+        "FTHG",
+        "FTR",
+        "HomeTeam"
+      ],
+      "min_cols": 7,
+      "max_cols": 106
+    },
+    "extra": {
+      "files_sampled": 2,
+      "union_cols": 25,
+      "cols": [
+        "AG",
+        "AvgCA",
+        "AvgCD",
+        "AvgCH",
+        "Away",
+        "B365CA",
+        "B365CD",
+        "B365CH",
+        "BFECA",
+        "BFECD",
+        "BFECH",
+        "Date",
+        "HG",
+        "Home",
+        "League",
+        "MaxCA",
+        "MaxCD",
+        "MaxCH",
+        "PSCA",
+        "PSCD",
+        "PSCH",
+        "Res",
+        "Season",
+        "Time",
+        "\u00ef\u00bb\u00bfCountry"
+      ]
+    }
+  },
+  "bronze_parquet": {
+    "path": "/Users/danielllewellyn/Developer/personal/data-ingestion/investigations/football-data-co-uk-ingestion/evidence/spike2_bronze_sample.parquet",
+    "rows_in": 2852,
+    "rows_validated": 2762,
+    "total_union_cols": 148
+  }
+}

@@ -1,0 +1,272 @@
+{
+  "base": "https://www.football-data.co.uk/",
+  "country_pages": [
+    "belgiumm.php",
+    "englandm.php",
+    "francem.php",
+    "germanym.php",
+    "greecem.php",
+    "https://www.football-data.co.uk/belgiumm.php",
+    "https://www.football-data.co.uk/blog/profitable_betting_system.php",
+    "https://www.football-data.co.uk/blog/sports_betting_random.php",
+    "https://www.football-data.co.uk/downloadm.php",
+    "https://www.football-data.co.uk/englandm.php",
+    "https://www.football-data.co.uk/francem.php",
+    "https://www.football-data.co.uk/germanym.php",
+    "https://www.football-data.co.uk/greecem.php",
+    "https://www.football-data.co.uk/italym.php",
+    "https://www.football-data.co.uk/netherlandsm.php",
+    "https://www.football-data.co.uk/portugalm.php",
+    "https://www.football-data.co.uk/profitable_betting_system.php",
+    "https://www.football-data.co.uk/scotlandm.php",
+    "https://www.football-data.co.uk/spainm.php",
+    "https://www.football-data.co.uk/turkeym.php",
+    "italym.php",
+    "netherlandsm.php",
+    "portugalm.php",
+    "scotlandm.php",
+    "spainm.php",
+    "turkeym.php"
+  ],
+  "leagues": {
+    "belgiumm.php": {
+      "csv_count": 31,
+      "csv_sample": [
+        "mmz4281/0001/B1.csv",
+        "mmz4281/0102/B1.csv",
+        "mmz4281/0203/B1.csv",
+        "mmz4281/0304/B1.csv",
+        "mmz4281/0405/B1.csv"
+      ]
+    },
+    "englandm.php": {
+      "csv_count": 153,
+      "csv_sample": [
+        "mmz4281/0001/E0.csv",
+        "mmz4281/0001/E1.csv",
+        "mmz4281/0001/E2.csv",
+        "mmz4281/0001/E3.csv",
+        "mmz4281/0102/E0.csv"
+      ]
+    },
+    "francem.php": {
+      "csv_count": 63,
+      "csv_sample": [
+        "mmz4281/0001/F1.csv",
+        "mmz4281/0001/F2.csv",
+        "mmz4281/0102/F1.csv",
+        "mmz4281/0102/F2.csv",
+        "mmz4281/0203/F1.csv"
+      ]
+    },
+    "germanym.php": {
+      "csv_count": 66,
+      "csv_sample": [
+        "mmz4281/0001/D1.csv",
+        "mmz4281/0001/D2.csv",
+        "mmz4281/0102/D1.csv",
+        "mmz4281/0102/D2.csv",
+        "mmz4281/0203/D1.csv"
+      ]
+    },
+    "greecem.php": {
+      "csv_count": 32,
+      "csv_sample": [
+        "mmz4281/0001/G1.csv",
+        "mmz4281/0102/G1.csv",
+        "mmz4281/0203/G1.csv",
+        "mmz4281/0304/G1.csv",
+        "mmz4281/0405/G1.csv"
+      ]
+    },
+    "https://www.football-data.co.uk/belgiumm.php": {
+      "csv_count": 31,
+      "csv_sample": [
+        "mmz4281/0001/B1.csv",
+        "mmz4281/0102/B1.csv",
+        "mmz4281/0203/B1.csv",
+        "mmz4281/0304/B1.csv",
+        "mmz4281/0405/B1.csv"
+      ]
+    },
+    "https://www.football-data.co.uk/blog/profitable_betting_system.php": {
+      "csv_count": 0,
+      "csv_sample": []
+    },
+    "https://www.football-data.co.uk/blog/sports_betting_random.php": {
+      "csv_count": 0,
+      "csv_sample": []
+    },
+    "https://www.football-data.co.uk/downloadm.php": {
+      "csv_count": 1,
+      "csv_sample": [
+        "mmz4281/2526/Latest_Results.csv"
+      ]
+    },
+    "https://www.football-data.co.uk/englandm.php": {
+      "csv_count": 153,
+      "csv_sample": [
+        "mmz4281/0001/E0.csv",
+        "mmz4281/0001/E1.csv",
+        "mmz4281/0001/E2.csv",
+        "mmz4281/0001/E3.csv",
+        "mmz4281/0102/E0.csv"
+      ]
+    },
+    "https://www.football-data.co.uk/francem.php": {
+      "csv_count": 63,
+      "csv_sample": [
+        "mmz4281/0001/F1.csv",
+        "mmz4281/0001/F2.csv",
+        "mmz4281/0102/F1.csv",
+        "mmz4281/0102/F2.csv",
+        "mmz4281/0203/F1.csv"
+      ]
+    },
+    "https://www.football-data.co.uk/germanym.php": {
+      "csv_count": 66,
+      "csv_sample": [
+        "mmz4281/0001/D1.csv",
+        "mmz4281/0001/D2.csv",
+        "mmz4281/0102/D1.csv",
+        "mmz4281/0102/D2.csv",
+        "mmz4281/0203/D1.csv"
+      ]
+    },
+    "https://www.football-data.co.uk/greecem.php": {
+      "csv_count": 32,
+      "csv_sample": [
+        "mmz4281/0001/G1.csv",
+        "mmz4281/0102/G1.csv",
+        "mmz4281/0203/G1.csv",
+        "mmz4281/0304/G1.csv",
+        "mmz4281/0405/G1.csv"
+      ]
+    },
+    "https://www.football-data.co.uk/italym.php": {
+      "csv_count": 62,
+      "csv_sample": [
+        "mmz4281/0001/I1.csv",
+        "mmz4281/0001/I2.csv",
+        "mmz4281/0102/I1.csv",
+        "mmz4281/0102/I2.csv",
+        "mmz4281/0203/I1.csv"
+      ]
+    },
+    "https://www.football-data.co.uk/netherlandsm.php": {
+      "csv_count": 33,
+      "csv_sample": [
+        "mmz4281/0001/N1.csv",
+        "mmz4281/0102/N1.csv",
+        "mmz4281/0203/N1.csv",
+        "mmz4281/0304/N1.csv",
+        "mmz4281/0405/N1.csv"
+      ]
+    },
+    "https://www.football-data.co.uk/portugalm.php": {
+      "csv_count": 32,
+      "csv_sample": [
+        "mmz4281/0001/P1.csv",
+        "mmz4281/0102/P1.csv",
+        "mmz4281/0203/P1.csv",
+        "mmz4281/0304/P1.csv",
+        "mmz4281/0405/P1.csv"
+      ]
+    },
+    "https://www.football-data.co.uk/profitable_betting_system.php": {
+      "csv_count": 0,
+      "csv_sample": []
+    },
+    "https://www.football-data.co.uk/scotlandm.php": {
+      "csv_count": 122,
+      "csv_sample": [
+        "mmz4281/0001/SC0.csv",
+        "mmz4281/0001/SC1.csv",
+        "mmz4281/0001/SC2.csv",
+        "mmz4281/0001/SC3.csv",
+        "mmz4281/0102/SC0.csv"
+      ]
+    },
+    "https://www.football-data.co.uk/spainm.php": {
+      "csv_count": 63,
+      "csv_sample": [
+        "mmz4281/0001/SP1.csv",
+        "mmz4281/0001/SP2.csv",
+        "mmz4281/0102/SP1.csv",
+        "mmz4281/0102/SP2.csv",
+        "mmz4281/0203/SP1.csv"
+      ]
+    },
+    "https://www.football-data.co.uk/turkeym.php": {
+      "csv_count": 32,
+      "csv_sample": [
+        "mmz4281/0001/T1.csv",
+        "mmz4281/0102/T1.csv",
+        "mmz4281/0203/T1.csv",
+        "mmz4281/0304/T1.csv",
+        "mmz4281/0405/T1.csv"
+      ]
+    },
+    "italym.php": {
+      "csv_count": 62,
+      "csv_sample": [
+        "mmz4281/0001/I1.csv",
+        "mmz4281/0001/I2.csv",
+        "mmz4281/0102/I1.csv",
+        "mmz4281/0102/I2.csv",
+        "mmz4281/0203/I1.csv"
+      ]
+    },
+    "netherlandsm.php": {
+      "csv_count": 33,
+      "csv_sample": [
+        "mmz4281/0001/N1.csv",
+        "mmz4281/0102/N1.csv",
+        "mmz4281/0203/N1.csv",
+        "mmz4281/0304/N1.csv",
+        "mmz4281/0405/N1.csv"
+      ]
+    },
+    "portugalm.php": {
+      "csv_count": 32,
+      "csv_sample": [
+        "mmz4281/0001/P1.csv",
+        "mmz4281/0102/P1.csv",
+        "mmz4281/0203/P1.csv",
+        "mmz4281/0304/P1.csv",
+        "mmz4281/0405/P1.csv"
+      ]
+    },
+    "scotlandm.php": {
+      "csv_count": 122,
+      "csv_sample": [
+        "mmz4281/0001/SC0.csv",
+        "mmz4281/0001/SC1.csv",
+        "mmz4281/0001/SC2.csv",
+        "mmz4281/0001/SC3.csv",
+        "mmz4281/0102/SC0.csv"
+      ]
+    },
+    "spainm.php": {
+      "csv_count": 63,
+      "csv_sample": [
+        "mmz4281/0001/SP1.csv",
+        "mmz4281/0001/SP2.csv",
+        "mmz4281/0102/SP1.csv",
+        "mmz4281/0102/SP2.csv",
+        "mmz4281/0203/SP1.csv"
+      ]
+    },
+    "turkeym.php": {
+      "csv_count": 32,
+      "csv_sample": [
+        "mmz4281/0001/T1.csv",
+        "mmz4281/0102/T1.csv",
+        "mmz4281/0203/T1.csv",
+        "mmz4281/0304/T1.csv",
+        "mmz4281/0405/T1.csv"
+      ]
+    }
+  },
+  "total_csv_files": 1379
+}
