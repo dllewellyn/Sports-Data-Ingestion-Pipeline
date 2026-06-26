@@ -114,10 +114,53 @@ class MainMatchRecord(BaseModel):
         return v
 
 
+class ExtraMatchRecord(BaseModel):
+    """One extra-family (`new/<CODE>.csv`) record — mandatory 9-field core.
+
+    A DIFFERENT core/keys from the main family (D5): country/league/season
+    provenance is carried in-file. Goals are coerced; blank rows are rejected
+    deterministically (same input → same rejects).
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    Country: str
+    League: str
+    Season: str
+    Date: str
+    Home: str
+    Away: str
+    HG: int
+    AG: int
+    Res: str
+
+    @field_validator("Country", "League", "Season", "Date", "Home", "Away", "Res", mode="before")
+    @classmethod
+    def _required_text(cls, v: object) -> str:
+        if _missing(v):
+            raise ValueError("required core field empty")
+        return str(v).strip()
+
+    @field_validator("HG", "AG", mode="before")
+    @classmethod
+    def _required_goals(cls, v: object) -> int:
+        if _missing(v):
+            raise ValueError("required goal count missing")
+        return int(float(v))
+
+    @field_validator("Res")
+    @classmethod
+    def _result_domain(cls, v: str) -> str:
+        if v not in {"H", "D", "A"}:
+            raise ValueError("Res must be one of H/D/A")
+        return v
+
+
 __all__ = [
     "User",
     "Address",
     "Company",
     "Geo",
     "MainMatchRecord",
+    "ExtraMatchRecord",
 ]

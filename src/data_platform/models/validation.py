@@ -48,3 +48,19 @@ main_bronze_schema = pa.DataFrameSchema(
     strict=False,
     coerce=True,
 )
+
+extra_bronze_schema = pa.DataFrameSchema(
+    {
+        "Country": pa.Column(str, nullable=False),
+        "League": pa.Column(str, nullable=False),
+        "Season": pa.Column(str, nullable=False, coerce=True),
+        "Date": pa.Column(str, nullable=False),
+        "Home": pa.Column(str, nullable=False),
+        "Away": pa.Column(str, nullable=False),
+        "HG": pa.Column(int, pa.Check.ge(0), nullable=False, coerce=True),
+        "AG": pa.Column(int, pa.Check.ge(0), nullable=False, coerce=True),
+        "Res": pa.Column(str, pa.Check.isin(["H", "D", "A"]), nullable=False),
+    },
+    strict=False,
+    coerce=True,
+)
