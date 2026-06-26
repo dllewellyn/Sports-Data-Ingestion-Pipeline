@@ -1,0 +1,4 @@
+# Azure DevOps CLI Configuration
+# Generated: 2026-06-26T14:14:57Z
+ORG="https://dev.azure.com/danielnllewellyn"
+PROJECT="TestProject123"

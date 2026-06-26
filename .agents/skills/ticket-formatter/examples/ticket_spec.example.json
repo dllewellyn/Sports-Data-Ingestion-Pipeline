@@ -1,0 +1,44 @@
+{
+  "epic": {
+    "id": null,
+    "work_item_type": "Epic",
+    "title": "Payment capture & settlement",
+    "state": "New",
+    "parent": null,
+    "sections": {
+      "overview": "## Overview\n\nProvide a resilient capture-and-settlement flow that deduplicates retried captures and reconciles against the settlement provider daily.",
+      "glossary": "## Glossary\n\n| Term | Definition |\n| --- | --- |\n| Capture | Moving an authorised amount to settlement. |\n| Idempotency key | Client-supplied token that dedupes a retried capture request. |\n| DLQ | Dead-letter queue holding settlement messages that exhausted retries. |",
+      "component_architecture": "## Component Architecture Overview\n\n- **Capture API** — accepts capture requests, enforces idempotency.\n- **Settlement worker** — drains the settlement queue, writes to the provider.\n- **Reconciler** — daily job comparing local ledger to provider statements.\n\nData flow: Capture API → settlement queue → Settlement worker → provider; Reconciler reads both sides.",
+      "definition_of_ready": "## Definition of Ready\n\n- [ ] Provider sandbox credentials available\n- [ ] Idempotency-key contract agreed with clients\n- [ ] Reconciliation window confirmed (daily, 02:00 UTC)",
+      "definition_of_done": "## Definition of Done\n\n- [ ] All child stories meet their acceptance criteria\n- [ ] Reconciliation discrepancies alert on-call\n- [ ] Dead-letter handling verified in staging"
+    }
+  },
+  "stories": [
+    {
+      "id": null,
+      "work_item_type": "User Story",
+      "title": "Idempotent capture",
+      "state": "New",
+      "sections": {
+        "user_story": "As a payments client, I want retried captures to be deduplicated, so that a customer is never charged twice.",
+        "description": "## Description\n\nThe Capture API must treat a repeated request carrying the same idempotency key as a no-op returning the original result.",
+        "acceptance_criteria": "## Acceptance Criteria\n\n- [ ] Given a capture with key K succeeded, when the same key K is sent again, then the original capture result is returned and no second charge occurs.\n- [ ] Given a new key, when captured, then a fresh capture is created.",
+        "dependencies": "## Dependencies\n\n- Idempotency-key contract from the epic DOR.",
+        "notes": "## Notes\n\nEvidence: transcripts/session-42.txt (design_decisions — dedupe retried captures)."
+      }
+    },
+    {
+      "id": null,
+      "work_item_type": "User Story",
+      "title": "Dead-letter handling for the settlement queue",
+      "state": "New",
+      "sections": {
+        "user_story": "As an operator, I want exhausted settlement messages to land in a DLQ, so that failures are visible and recoverable.",
+        "description": "## Description\n\nMessages that exhaust retries move to a dead-letter queue with the original payload and failure reason.",
+        "acceptance_criteria": "## Acceptance Criteria\n\n- [ ] Given a message fails N retries, when the limit is hit, then it is moved to the DLQ with failure metadata.\n- [ ] Given a DLQ message, when replayed, then it re-enters the settlement flow.",
+        "dependencies": "## Dependencies\n\n- Depends on \"Idempotent capture\" so replays are safe.",
+        "notes": "## Notes\n\nEvidence: architecture/payment-service.puml (queue_management — DLQ strategy)."
+      }
+    }
+  ]
+}
