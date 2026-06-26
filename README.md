@@ -44,8 +44,8 @@ persisted as **Apache Parquet** and full **OpenTelemetry** tracing wired for
 ## Quick start
 
 ```bash
-cp .env.example .env          # set JUPYTER_TOKEN and your SigNoz endpoint
-docker compose up --build     # builds the image, starts all services
+cp .env.example .env          # defaults to the dev overlay (apps + SigNoz); set JUPYTER_TOKEN
+docker compose up --build     # builds the image, starts apps + SigNoz (UI on :8080)
 ```
 
 Then, from any machine on your network:
