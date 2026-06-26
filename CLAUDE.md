@@ -95,6 +95,35 @@ raw_users ──▶ silver/stg_users ──▶ gold/dim_users_by_city ──▶ 
   `/opt/venv` (not `/app`) so the `./src` bind-mount for live reload doesn't
   shadow installed dependencies.
 
+#### football-data.co.uk bronze ingestion (`football/` + `assets/football_*.py`)
+
+- **The two families need different mandated encodings — this is load-bearing.**
+  Main (`mmz4281/<season>/<div>.csv`) is **latin-1**; extra (`new/<CODE>.csv`) is
+  **utf-8-sig** (UTF-8 with BOM). Reading an extra file as latin-1 mojibakes the
+  first header into `ï»¿Country`; reading it as plain `utf-8` leaves a BOM on
+  `Country`. utf-8-sig strips the BOM. Don't "simplify" both families to one
+  encoding.
+- **Skip-existing is keyed purely on bronze-artifact presence**, and only for
+  **historical** files. "Current season" is derived from the season token with a
+  **July rollover** (`football/season.py`): a run in months Jan–Jun belongs to the
+  prior calendar year's season. Current-season + all extra files are *always*
+  re-fetched (extra packs every season in one file). No ETag/Last-Modified/hash.
+- **One Parquet per source file, partitioned by family** —
+  `football_main/<league>/<season>/<div>.parquet`, `football_extra/<code>.parquet`.
+  Bronze is faithful-to-source: the mandatory core is enforced (Pydantic record +
+  open Pandera `strict=False` frame) and the wide optional-odds columns ride along
+  (a main E0 file is 7 cols in 1993/94 → 106 in 2023/24).
+- **The live registry exposes 11 main + 16 extra leagues** (the spec estimated
+  ~19 extra). The registry in `football/registry.py` is the single source of
+  truth — discovery holds no hard-coded league URLs.
+- **Per-file failure isolation:** a fetch error, zero-valid-rows file, or schema
+  failure is recorded and the backfill continues; **no partial/empty Parquet is
+  written** for it (atomic temp-file + rename write). The asset re-raises at the
+  end so the run status reflects failures while successful files persist.
+- **Importing `definitions` (incl. in pytest) reads the dbt manifest**, so run
+  `dbt parse` first or the import fails with an orjson/manifest error. The one
+  test that imports `defs` skips gracefully when the manifest is absent.
+
 ### Configuration & telemetry
 
 - All runtime config flows through `config.py` (`pydantic-settings`, env-driven):

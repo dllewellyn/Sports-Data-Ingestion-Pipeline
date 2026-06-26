@@ -322,6 +322,10 @@ this diverges from the investigation, which scoped the full backfill *out*):**
 - **A1** — "Whitelist / known league registry" = the leagues characterized in the
   investigation (11 main leagues ≈ 689 files; ≈19 extra leagues). The exact registry
   contents are agreed at build time; this spec governs behaviour, not the list.
+  **Implementation note (2026-06-26):** a live enumeration of the site found **16**
+  extra leagues (`new/<CODE>.csv`), not ~19 — the registry in
+  `src/data_platform/football/registry.py` reflects the real 16. The "~19" above was
+  an estimate; AC15's count is likewise approximate.
 - **A2** — Ingestion is run on demand via Dagster (materialization/job), consistent with
   the existing bronze asset pattern; no schedule is built (Non-goal).
 - **A3** — "Current season" is determinable from the file's season identifier (URL path

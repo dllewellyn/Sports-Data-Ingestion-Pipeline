@@ -89,7 +89,9 @@ def validate_rows(
 
     Invalid rows (blank/footer/incomplete, or any row when a core column is absent)
     are dropped — never raised out — so one bad row can't lose a whole file. Returns
-    (valid_frame, raw_count, valid_count, reject_count).
+    (valid_frame, raw_count, valid_count, reject_count). ``raw_count`` is the number
+    of *parsed* rows (pandas already skipped any structurally-broken lines on read);
+    this matches the spec's 552→462 framing (552 = parsed rows, 462 = core-valid).
     """
     raw_count = len(df)
     records = df.to_dict("records")
