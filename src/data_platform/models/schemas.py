@@ -10,7 +10,9 @@ coercion — Pydantic v2 is the current best-in-class choice for this boundary.)
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+import math
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class Geo(BaseModel):
@@ -59,4 +61,63 @@ class User(BaseModel):
         }
 
 
-__all__ = ["User", "Address", "Company", "Geo"]
+def _missing(v: object) -> bool:
+    """True for the empty/footer/blank values that pepper football-data CSVs."""
+    if v is None:
+        return True
+    if isinstance(v, float) and math.isnan(v):
+        return True
+    return isinstance(v, str) and v.strip() == ""
+
+
+# --- football-data.co.uk bronze record contracts (D4, D5) ----------------------
+# Two families, two cores. `extra="ignore"` lets the wide optional odds/stat
+# columns ride along at the frame level (Pandera) without bloating the record.
+
+
+class MainMatchRecord(BaseModel):
+    """One main-family (`mmz4281/<season>/<div>.csv`) record — mandatory 7-field core.
+
+    Blank/footer/incomplete rows fail here and are skipped-and-counted by the
+    ingestor (E1, E4). Goals are coerced from the float/str shapes pandas produces.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    Div: str
+    Date: str
+    HomeTeam: str
+    AwayTeam: str
+    FTHG: int
+    FTAG: int
+    FTR: str
+
+    @field_validator("Div", "Date", "HomeTeam", "AwayTeam", "FTR", mode="before")
+    @classmethod
+    def _required_text(cls, v: object) -> str:
+        if _missing(v):
+            raise ValueError("required core field empty")
+        return str(v).strip()
+
+    @field_validator("FTHG", "FTAG", mode="before")
+    @classmethod
+    def _required_goals(cls, v: object) -> int:
+        if _missing(v):
+            raise ValueError("required goal count missing")
+        return int(float(v))
+
+    @field_validator("FTR")
+    @classmethod
+    def _result_domain(cls, v: str) -> str:
+        if v not in {"H", "D", "A"}:
+            raise ValueError("FTR must be one of H/D/A")
+        return v
+
+
+__all__ = [
+    "User",
+    "Address",
+    "Company",
+    "Geo",
+    "MainMatchRecord",
+]
