@@ -7,7 +7,7 @@ Project-local skills for agentic workflows. Each skill is a directory containing
 These skills are designed to chain, front-to-back, across the lifecycle of a piece of work:
 
 1. **`investigation`** — discovery. Turn an open question / unknown into evidence-backed conclusions. Proposes the Specification skill on completion. ✅ available
-2. **`specification`** — definition. Turn investigation findings into *what to build*. 🔜 next
+2. **`specification`** — definition. Turn one or more user stories (and any investigation findings) into an implementable, outcome-focused spec under `specs/`. ✅ available
 
 ## Skills
 
@@ -16,6 +16,7 @@ These skills are designed to chain, front-to-back, across the lifecycle of a pie
 | [`investigation`](investigation/SKILL.md) | Interview-driven investigation of an open question; scaffolds a predefined structure, drives to conclusions, hands off to Specification. |
 | ├─ [`investigation/scaffold`](investigation/scaffold/SKILL.md) | Create the predefined investigation directory & starter files. |
 | └─ [`investigation/synthesize-findings`](investigation/synthesize-findings/SKILL.md) | Convert gathered evidence into conclusions + a Specification-ready summary. |
+| [`specification`](specification/SKILL.md) | Interview-driven; turns one or more user stories (+ investigation findings) into an implementable, outcome-focused spec (`specs/NNN-<slug>-specification.md`) with BDD scenarios, edge cases, acceptance criteria and traceability. |
 | [`self-learn`](self-learn/SKILL.md) | Cross-cutting. At the end of a unit of work, mine the session, git changes, and existing skills for durable learnings and route each to `CLAUDE.md`, an updated skill, or a new skill (approval-gated). |
 
 ## Conventions
