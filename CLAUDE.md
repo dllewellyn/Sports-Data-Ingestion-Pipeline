@@ -41,6 +41,10 @@ There is no Python unit-test suite; data correctness is asserted by **dbt tests*
 
 ## Architecture
 
+> Code/package structure, layering & dependency rules, and the "add a new data
+> source" guide live in [`ARCHITECTURE.md`](ARCHITECTURE.md). The notes below are
+> the *runtime gotchas*; keep structural facts in ARCHITECTURE.md, not here.
+
 Medallion pipeline orchestrated by Dagster, transformed/tested by dbt on DuckDB,
 every layer persisted as Parquet, traced via OpenTelemetry → SigNoz.
 

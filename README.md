@@ -18,7 +18,7 @@ persisted as **Apache Parquet** and full **OpenTelemetry** tracing wired for
 | Transformation | **dbt-core + dbt-duckdb** | Silver/gold models, lineage surfaced as Dagster assets. |
 | Engine / storage | **DuckDB + Parquet** | DuckDB is the warehouse; each layer also persists as Parquet. |
 | Notebooks | **JupyterLab** | Remote-accessible at `:8888`. |
-| Observability | **OpenTelemetry → SigNoz** | OTLP traces via a local collector that forwards to SigNoz. |
+| Observability | **OpenTelemetry → SigNoz** | Apps export OTLP directly; dev runs self-hosted SigNoz in-stack, prod targets an external collector. |
 
 ## Medallion flow (hello-world)
 
@@ -133,6 +133,10 @@ Traces appear under service `data-platform`. Each run produces an `ingest.raw_us
 span (with a child `requests` HTTP span) and a `publish.gold_users_by_city` span.
 
 ## Layout
+
+> For the canonical map of the codebase — package structure, layering &
+> dependency rules, and how to add a new data source — see
+> [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ```
 ├── docker-compose.yml          # neutral base: dagster-webserver, dagster-daemon, jupyter
