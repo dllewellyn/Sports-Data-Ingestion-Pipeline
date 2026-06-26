@@ -28,6 +28,12 @@ uv run --project ../.. dbt test  --select dim_users_by_city  # tests only
 uv run ruff check --fix src
 uv run ruff format src
 
+# Unit-test pure-Python logic with pytest. Tests live under tests/ mirroring the
+# src/data_platform/ layout (e.g. tests/football/). pyproject puts src/ on the
+# import path (importlib mode, no __init__.py in tests/ — keep test basenames
+# unique). pytest is a local/CI gate, NOT part of the ruff pre-commit hook.
+PYTHONPATH=src uv run pytest
+
 # Enable the git pre-commit hook (once per clone) and run it across everything
 uv run pre-commit install
 uv run pre-commit run --all-files
@@ -36,8 +42,10 @@ uv run pre-commit run --all-files
 cp .env.example .env && docker compose up --build
 ```
 
-There is no Python unit-test suite; data correctness is asserted by **dbt tests**
-(run inline via `dbt build`) plus Pydantic/Pandera validation at ingest.
+Data correctness in the warehouse is asserted by **dbt tests** (run inline via
+`dbt build`) plus Pydantic/Pandera validation at ingest. Pure-Python logic
+(discovery, throttling, season detection, contracts, ingestor wiring) is covered
+by **pytest** under `tests/` (see the `pytest` command above).
 
 ## Architecture
 
@@ -155,3 +163,13 @@ constraint, a tool/version gotcha, a failure mode and its fix, a new command or
 convention — add it here in the same commit.** Keep additions concise and put
 hard-won constraints under "Non-obvious constraints". Remove guidance that becomes
 stale. Do not restate what's discoverable from the file tree or generic Python advice.
+
+# Do not overengieer this project
+
+Code should be simple and easy to understand. Avoid unnecessary abstractions, patterns, or frameworks that do not add clear value.
+
+Prioritize clarity and maintainability over cleverness. Same goes for architecture - split modules by logical boundaries, but avoid overcomplicating the structure.
+
+Follow the KISS principle: Keep It Simple, Stupid. If a solution can be implemented in a straightforward way, do so. Avoid premature optimization or overengineering.
+
+Implement good levels of abstraction, at the top level it should read like prose; with files having a clear purpose and a single responsibility. Avoid deep inheritance hierarchies or complex design patterns unless they are clearly justified.

@@ -36,6 +36,7 @@ dependencies = [
 dev = [
     "ruff>=0.8",
     "pre-commit>=4.0",
+    "pytest>=9.1.1",
 ]
 
 # This is a "virtual" project: we do NOT build/install `data_platform` as a wheel.
@@ -46,6 +47,14 @@ package = false
 [tool.dagster]
 module_name = "data_platform.definitions"
 code_location_name = "data_platform"
+
+[tool.pytest.ini_options]
+# Pure-Python unit tests live under tests/ mirroring src/data_platform/. The project
+# is not installed as a wheel (package = false), so put src/ on the import path and
+# use importlib mode (no __init__.py in tests/; keep test basenames unique).
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "--import-mode=importlib"
 
 [tool.ruff]
 line-length = 100
