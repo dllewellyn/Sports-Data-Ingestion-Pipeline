@@ -1,5 +1,11 @@
 name: data-platform
 
+# Environment-NEUTRAL base. It defines the app services and nothing about where
+# telemetry goes or whether SigNoz runs. Always combine it with exactly one
+# overlay (selected by COMPOSE_FILE in .env):
+#   dev  -> docker-compose.yml : docker-compose.signoz.yml  (self-hosted SigNoz)
+#   prod -> docker-compose.yml : docker-compose.prod.yml    (external collector)
+#
 # Shared config block for the three Python services (they all run the same image).
 x-app: &app
   build:
@@ -7,24 +13,20 @@ x-app: &app
     dockerfile: Dockerfile
   image: data-platform:local
   env_file: .env
+  restart: unless-stopped
   environment:
     DAGSTER_HOME: /app/.dagster
     DATA_DIR: /app/data
     DUCKDB_PATH: /app/data/warehouse.duckdb
     PYTHONPATH: /app/src
-    # Apps export OTLP to the local collector, which forwards to SigNoz.
-    OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    # OTEL_EXPORTER_OTLP_ENDPOINT is set by the overlay (dev -> SigNoz collector,
+    # prod -> external collector), so the base stays environment-neutral.
   volumes:
-    # Live code reload: source is bind-mounted, venv lives at /opt/venv (not shadowed).
-    - ./src:/app/src
-    - ./dbt:/app/dbt
-    - ./notebooks:/app/notebooks
+    # Persisted data + a shared Dagster home (webserver + daemon see the same
+    # runs/schedules). The source tree is baked into the image (Dockerfile
+    # COPY . .); the dev overlay bind-mounts it back for live reload.
     - ./data:/app/data
-    # Shared Dagster home so webserver + daemon see the same runs/schedules.
     - dagster_home:/app/.dagster
-  depends_on:
-    otel-collector:
-      condition: service_started
 
 services:
   # Dagster UI (asset graph, runs, logs). Reachable from another machine on :3000.
@@ -51,18 +53,6 @@ services:
              --ServerApp.root_dir=/app --IdentityProvider.token=$${JUPYTER_TOKEN}"
     ports:
       - "8888:8888"
-
-  # OpenTelemetry Collector: receives OTLP from the apps and forwards to SigNoz.
-  # Point SIGNOZ_OTLP_ENDPOINT (in .env) at your SigNoz ingest endpoint.
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.116.1
-    command: ["--config=/etc/otel/config.yaml"]
-    env_file: .env
-    volumes:
-      - ./otel-collector-config.yaml:/etc/otel/config.yaml:ro
-    ports:
-      - "4317:4317"  # OTLP gRPC
-      - "4318:4318"  # OTLP HTTP
 
 volumes:
   dagster_home:

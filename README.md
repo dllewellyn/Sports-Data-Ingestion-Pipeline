@@ -78,16 +78,56 @@ uv run dagster job execute -m data_platform.definitions -j medallion_hello_world
 ```
 
 > Without a collector running, you'll see harmless `Connection refused` retries from
-> the OTLP exporter — spans are simply dropped. Start the collector (`docker compose up
-> otel-collector`) or point `OTEL_EXPORTER_OTLP_ENDPOINT` at a live endpoint to see traces.
+> the OTLP exporter — spans are simply dropped. Bring up the stack (`docker compose up -d`)
+> or point `OTEL_EXPORTER_OTLP_ENDPOINT` at a live endpoint to see traces.
 
-## SigNoz
+## Telemetry: dev vs prod
 
-The `otel-collector` service receives OTLP from the apps and forwards to SigNoz.
-Set these in `.env`:
+`docker-compose.yml` is an **environment-neutral base** (app services only). One
+overlay, selected by `COMPOSE_FILE` in `.env`, decides where telemetry goes:
 
-- **Self-hosted SigNoz on the same host:** `SIGNOZ_OTLP_ENDPOINT=host.docker.internal:4317`, `SIGNOZ_OTLP_INSECURE=true`.
-- **SigNoz Cloud:** `SIGNOZ_OTLP_ENDPOINT=ingest.<region>.signoz.cloud:443`, `SIGNOZ_OTLP_INSECURE=false`, `SIGNOZ_INGESTION_KEY=<key>`.
+| Mode | `COMPOSE_FILE` | Telemetry target |
+|------|----------------|------------------|
+| **dev** | `docker-compose.yml:docker-compose.signoz.yml` | self-hosted SigNoz (in-stack) |
+| **prod** | `docker-compose.yml:docker-compose.prod.yml` | external collector you run |
+
+### Dev — full stack with SigNoz
+
+```bash
+cp .env.example .env       # defaults to the dev overlay
+docker compose up -d       # apps + full SigNoz; open http://localhost:8080
+```
+
+A complete self-hosted SigNoz stack ships in `docker-compose.signoz.yml` (ClickHouse,
+Zookeeper, the SigNoz UI/query service on `:8080`, its OTLP collector on `:4317/:4318`,
+and a one-shot schema migrator), with pinned config vendored under `signoz/`. The dev
+overlay also bind-mounts `./src` `./dbt` `./notebooks` for live reload and joins the
+apps to `signoz-net`, so they export OTLP straight to `signoz-otel-collector:4317` —
+no separate forwarding collector.
+
+> **Heads-up:** ClickHouse + Zookeeper want ~2–3 GB RAM, `init-clickhouse` downloads a
+> UDF binary from GitHub on first boot, and this is a **pinned v0.116.1 snapshot** —
+> SigNoz has deprecated Compose, so bump `VERSION`/`OTELCOL_TAG` in `.env` and re-pull
+> `signoz/**` from the matching git tag to upgrade.
+
+### Prod — external collector
+
+No SigNoz is started; the apps export to a collector that is **already running** in
+your environment. In the prod `.env`:
+
+```dotenv
+COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
+OTEL_EXPORTER_OTLP_ENDPOINT=http://your-collector.internal:4317   # required
+```
+
+```bash
+docker compose build && docker compose up -d   # runs the code baked into the image
+```
+
+Prod uses the image's baked-in code (no source bind-mounts), so rebuild/ship the image
+to deploy changes. If `OTEL_EXPORTER_OTLP_ENDPOINT` is unset, compose fails fast. When
+the collector is a sibling container, uncomment the `otel-external` network in
+`docker-compose.prod.yml` to join its network.
 
 Traces appear under service `data-platform`. Each run produces an `ingest.raw_users`
 span (with a child `requests` HTTP span) and a `publish.gold_users_by_city` span.
@@ -95,9 +135,11 @@ span (with a child `requests` HTTP span) and a `publish.gold_users_by_city` span
 ## Layout
 
 ```
-├── docker-compose.yml          # dagster-webserver, dagster-daemon, jupyter, otel-collector
+├── docker-compose.yml          # neutral base: dagster-webserver, dagster-daemon, jupyter
+├── docker-compose.signoz.yml   # DEV overlay: self-hosted SigNoz + live-reload wiring
+├── docker-compose.prod.yml     # PROD overlay: export to an external collector
+├── signoz/                     # pinned SigNoz config (clickhouse XML + collector YAML)
 ├── Dockerfile                  # uv-based image; venv at /opt/venv (not shadowed by bind mount)
-├── otel-collector-config.yaml  # OTLP in -> SigNoz out
 ├── pyproject.toml / uv.lock     # deps (uv, package=false, src/ on PYTHONPATH)
 ├── src/data_platform/
 │   ├── config.py               # pydantic-settings (env-driven)

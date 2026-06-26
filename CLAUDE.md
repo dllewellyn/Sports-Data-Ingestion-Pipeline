@@ -91,8 +91,35 @@ raw_users ──▶ silver/stg_users ──▶ gold/dim_users_by_city ──▶ 
   via `env_var(...)`, so all components must agree on these.
 - `otel.py` installs the tracer provider once and auto-instruments `requests`.
   Without a collector reachable at `OTEL_EXPORTER_OTLP_ENDPOINT` you get harmless
-  `Connection refused` retries; spans are dropped. The collector forwards to SigNoz
-  per `otel-collector-config.yaml` (endpoint/key set in `.env`).
+  `Connection refused` retries; spans are dropped (so app startup never depends on
+  the collector — no `depends_on` edge in compose).
+- **Compose is base + one overlay, selected by `COMPOSE_FILE` in `.env`.**
+  `docker-compose.yml` is environment-NEUTRAL (app services only; it sets no OTLP
+  endpoint and no network, and bind-mounts only `./data` + the `dagster_home`
+  volume). Exactly one overlay is layered on top:
+    - **dev** → `docker-compose.signoz.yml`: the full self-hosted SigNoz stack
+      *plus* the app-service dev wiring (endpoint → `signoz-otel-collector:4317`,
+      join `signoz-net`, bind-mount `./src` `./dbt` `./notebooks` over the baked
+      image for live reload).
+    - **prod** → `docker-compose.prod.yml`: no SigNoz; points apps at an external
+      collector via `${OTEL_EXPORTER_OTLP_ENDPOINT:?...}` (compose fails fast if it
+      is unset). No source bind-mounts — prod runs the code baked into the image
+      (`COPY . .` in the Dockerfile), so rebuild/ship the image to deploy.
+  Overlay merge relies on Compose semantics: `environment` merges by key (overlay
+  sets the endpoint), service `volumes` concatenate (dev adds the three live-reload
+  mounts to the base two), and `networks` is set by the overlay. Don't put
+  env-specific values (endpoint, signoz-net, live-reload mounts) back into the base.
+- **Telemetry backend is self-hosted SigNoz, vendored into the repo (dev only).**
+  The full stack (ClickHouse + Zookeeper + SigNoz UI + its own OTLP collector + a
+  one-shot schema migrator) lives in `docker-compose.signoz.yml`, with pinned config
+  under `signoz/` (`common/clickhouse/*.xml`, `common/signoz/`,
+  `docker/otel-collector-config.yaml`). It writes traces/metrics/logs into
+  ClickHouse; UI on `:8080`. The `signoz-net` network is defined here.
+- **The SigNoz stack is a PINNED v0.116.1 snapshot.** Upstream deprecated Compose
+  in favour of their "Foundry" installer, so it won't auto-update. To upgrade, bump
+  `VERSION`/`OTELCOL_TAG` in `.env` and re-pull `signoz/**` from the matching SigNoz
+  git tag (`deploy/docker` + `deploy/common`); the bind-mount paths were rewritten
+  from upstream's `../common/...` to repo-root-relative `./signoz/...`.
 
 ## Python conventions
 

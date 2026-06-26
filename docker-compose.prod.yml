@@ -1,0 +1,29 @@
+# Production overlay. Combine with the base via COMPOSE_FILE in .env:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
+#
+# No SigNoz here — telemetry goes to an EXTERNAL OTLP collector that is already
+# running in your environment. The app code is the version baked into the image
+# (no source bind-mounts), so build/ship the image as part of your deploy.
+
+# Point every app service at the external collector. OTEL_EXPORTER_OTLP_ENDPOINT
+# MUST be set (in the prod .env or the deploy environment) or compose fails fast.
+x-prod-app: &prod-app
+  environment:
+    OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:?set OTEL_EXPORTER_OTLP_ENDPOINT to your external collector, e.g. http://otel-collector.internal:4317}
+  # If the external collector is a sibling container on a pre-existing Docker
+  # network, uncomment below (and the networks block at the bottom) to join it.
+  # Otherwise the endpoint above is reached by DNS/host/IP and needs no shared net.
+  # networks:
+  #   - otel-external
+
+services:
+  dagster-webserver:
+    <<: *prod-app
+  dagster-daemon:
+    <<: *prod-app
+  jupyter:
+    <<: *prod-app
+
+# networks:
+#   otel-external:
+#     external: true   # must already exist (e.g. the network your collector runs on)
