@@ -1,0 +1,68 @@
+name: data-platform
+
+# Shared config block for the three Python services (they all run the same image).
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: data-platform:local
+  env_file: .env
+  environment:
+    DAGSTER_HOME: /app/.dagster
+    DATA_DIR: /app/data
+    DUCKDB_PATH: /app/data/warehouse.duckdb
+    PYTHONPATH: /app/src
+    # Apps export OTLP to the local collector, which forwards to SigNoz.
+    OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  volumes:
+    # Live code reload: source is bind-mounted, venv lives at /opt/venv (not shadowed).
+    - ./src:/app/src
+    - ./dbt:/app/dbt
+    - ./notebooks:/app/notebooks
+    - ./data:/app/data
+    # Shared Dagster home so webserver + daemon see the same runs/schedules.
+    - dagster_home:/app/.dagster
+  depends_on:
+    otel-collector:
+      condition: service_started
+
+services:
+  # Dagster UI (asset graph, runs, logs). Reachable from another machine on :3000.
+  dagster-webserver:
+    <<: *app
+    command: >
+      sh -c "cd /app/dbt/data_platform && dbt parse --profiles-dir . &&
+             cd /app && dagster-webserver -h 0.0.0.0 -p 3000 -m data_platform.definitions"
+    ports:
+      - "3000:3000"
+
+  # Dagster daemon: runs schedules, sensors, and the run queue.
+  dagster-daemon:
+    <<: *app
+    command: >
+      sh -c "cd /app/dbt/data_platform && dbt parse --profiles-dir . &&
+             cd /app && dagster-daemon run"
+
+  # JupyterLab, reachable from another machine on :8888 (token-protected).
+  jupyter:
+    <<: *app
+    command: >
+      sh -c "jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root
+             --ServerApp.root_dir=/app --IdentityProvider.token=$${JUPYTER_TOKEN}"
+    ports:
+      - "8888:8888"
+
+  # OpenTelemetry Collector: receives OTLP from the apps and forwards to SigNoz.
+  # Point SIGNOZ_OTLP_ENDPOINT (in .env) at your SigNoz ingest endpoint.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.116.1
+    command: ["--config=/etc/otel/config.yaml"]
+    env_file: .env
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel/config.yaml:ro
+    ports:
+      - "4317:4317"  # OTLP gRPC
+      - "4318:4318"  # OTLP HTTP
+
+volumes:
+  dagster_home:

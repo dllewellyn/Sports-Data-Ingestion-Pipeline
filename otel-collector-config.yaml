@@ -1,0 +1,47 @@
+# OpenTelemetry Collector config.
+# Apps -> this collector (OTLP) -> SigNoz. Running a local collector is the
+# recommended pattern: it batches/retries so app code stays simple.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 5s
+  resourcedetection:
+    detectors: [env, system]
+    timeout: 2s
+
+exporters:
+  # Forward everything to SigNoz. Set SIGNOZ_OTLP_ENDPOINT in .env
+  # (e.g. ingest.<region>.signoz.cloud:443 for cloud, or host.docker.internal:4317
+  # for a self-hosted SigNoz running on the host).
+  otlp/signoz:
+    endpoint: ${env:SIGNOZ_OTLP_ENDPOINT}
+    tls:
+      insecure: ${env:SIGNOZ_OTLP_INSECURE}
+    headers:
+      # SigNoz Cloud requires an ingestion key; ignored by self-hosted.
+      signoz-ingestion-key: ${env:SIGNOZ_INGESTION_KEY}
+  # Echo to collector logs so you can confirm spans flow even without SigNoz up.
+  debug:
+    verbosity: normal
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [resourcedetection, batch]
+      exporters: [otlp/signoz, debug]
+    metrics:
+      receivers: [otlp]
+      processors: [resourcedetection, batch]
+      exporters: [otlp/signoz]
+    logs:
+      receivers: [otlp]
+      processors: [resourcedetection, batch]
+      exporters: [otlp/signoz]

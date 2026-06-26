@@ -1,0 +1,10 @@
+data_platform:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      # Same DuckDB file the Dagster gold export reads.
+      path: "{{ env_var('DUCKDB_PATH', '/app/data/warehouse.duckdb') }}"
+      threads: 4
+      extensions:
+        - parquet

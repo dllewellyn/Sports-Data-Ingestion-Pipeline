@@ -1,0 +1,25 @@
+# Run on every commit: `uv run pre-commit install` once to enable the git hook.
+# Manual full run: `uv run pre-commit run --all-files`.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.20
+    hooks:
+      # Lint (PEP 8 + import order + pyupgrade + bugbear), auto-fixing what it can.
+      - id: ruff
+        args: [--fix]
+      # Format (PEP 8 layout). Keep this last so formatting wins.
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: '\.ipynb$'
+      - id: end-of-file-fixer
+        exclude: '\.ipynb$'
+      - id: check-yaml
+        # dbt/profiles use Jinja templating that isn't valid standalone YAML.
+        exclude: '^dbt/.*\.(yml|yaml)$'
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: detect-private-key

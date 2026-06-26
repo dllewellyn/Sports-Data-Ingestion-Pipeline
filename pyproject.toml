@@ -1,0 +1,57 @@
+[project]
+name = "data-platform"
+version = "0.1.0"
+description = "Medallion data ingestion platform: Dagster + dbt + DuckDB + Parquet + OpenTelemetry/SigNoz"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    # Orchestration + UI
+    "dagster>=1.9",
+    "dagster-webserver>=1.9",
+    "dagster-dbt>=0.25",
+    # Transformation + tests (dbt) on DuckDB
+    "dbt-core>=1.9",
+    "dbt-duckdb>=1.9",
+    # Storage / engine
+    "duckdb>=1.1",
+    "pyarrow>=18.0",
+    # Dataframes + HTTP
+    "pandas>=2.2",
+    "requests>=2.32",
+    "tabulate>=0.9",
+    # Modern data validation. dataclasses still exist, but Pydantic v2 is the
+    # current best-in-class for validating data crossing a boundary (API -> code).
+    # Pandera validates the DataFrame; dbt tests validate the warehouse.
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "pandera>=0.22",
+    # OpenTelemetry -> SigNoz (traces). OTLP/gRPC exporter + auto-instrument requests.
+    "opentelemetry-sdk>=1.29",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.29",
+    "opentelemetry-instrumentation-requests>=0.50b0",
+    # Notebooks + remote-accessible UI
+    "jupyterlab>=4.3",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8",
+    "pre-commit>=4.0",
+]
+
+# This is a "virtual" project: we do NOT build/install `data_platform` as a wheel.
+# Code is imported from src/ via PYTHONPATH so edits are live (no rebuild) in Docker.
+[tool.uv]
+package = false
+
+[tool.dagster]
+module_name = "data_platform.definitions"
+code_location_name = "data_platform"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src"]
+
+[tool.ruff.lint]
+# pycodestyle (PEP 8) + pyflakes + isort + pyupgrade + bugbear + comprehensions + simplify
+select = ["E", "W", "F", "I", "UP", "B", "C4", "SIM"]
