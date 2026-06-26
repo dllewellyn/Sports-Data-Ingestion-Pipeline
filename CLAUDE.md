@@ -123,6 +123,22 @@ raw_users ──▶ silver/stg_users ──▶ gold/dim_users_by_city ──▶ 
 - **Importing `definitions` (incl. in pytest) reads the dbt manifest**, so run
   `dbt parse` first or the import fails with an orjson/manifest error. The one
   test that imports `defs` skips gracefully when the manifest is absent.
+- **The daemon and webserver must load the SAME `workspace.yaml`.** They are
+  separate processes; if the webserver loads the location via `-m
+  data_platform.definitions` (a process-local workspace) while `dagster-daemon run`
+  has no workspace, the daemon's workspace is empty and any **queued** run (UI
+  launch → `QueuedRunCoordinator`) fails at launch with
+  `DagsterCodeLocationNotFoundError: Location data_platform.definitions does not
+  exist in workspace`. Both compose services load `workspace.yaml`; keep it that
+  way. (Validation: `dagster definitions validate` only loads the location in one
+  process — it does NOT catch this; you must actually launch a queued run, or at
+  least `dagster definitions validate -w workspace.yaml`.)
+- **`AssetSelection.all()` sweeps in every registered asset**, so `medallion_job`
+  explicitly subtracts the football assets (`AssetSelection.all() -
+  football_assets`). Without that, the hello-world demo job *and the daily
+  schedule* would trigger the ~705-file football backfill. Run football only via
+  the dedicated `football_backfill` job. When adding a new heavy/standalone source,
+  give it its own job and exclude it from `all()`-based jobs.
 
 ### Configuration & telemetry
 

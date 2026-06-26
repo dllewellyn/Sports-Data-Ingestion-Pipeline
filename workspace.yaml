@@ -1,0 +1,18 @@
+# Dagster workspace — the SINGLE source of code locations, loaded by BOTH the
+# webserver and the daemon so they agree on what exists.
+#
+# Why this file is required (non-obvious): the webserver and the daemon are
+# separate processes. If the webserver loads the location via `-m
+# data_platform.definitions` (a process-local, in-memory workspace) while the
+# daemon runs `dagster-daemon run` with no workspace, the daemon's workspace is
+# EMPTY. The UI can then enqueue a run, but when the QueuedRunCoordinator daemon
+# dequeues it the launcher calls get_code_location(...) and fails with
+# "Location data_platform.definitions does not exist in workspace". Pointing both
+# processes at this file keeps their workspaces identical.
+#
+# The module is importable via PYTHONPATH=src (set in the environment); run
+# `dbt parse` first so the dbt manifest exists at @dbt_assets decoration time.
+load_from:
+  - python_module:
+      module_name: data_platform.definitions
+      location_name: data_platform.definitions

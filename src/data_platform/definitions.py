@@ -23,9 +23,13 @@ from .otel import configure_telemetry
 configure_telemetry()
 
 # Hello-world flow: bronze (ingest) -> silver+gold (dbt) -> gold Parquet export.
+# Exclude the football bronze assets — they are a separate, on-demand source (a full
+# backfill is ~705 files); `AssetSelection.all()` would otherwise sweep them into this
+# demo job (and the daily schedule). Run football via `football_backfill` instead.
+football_assets = AssetSelection.assets(football_main, football_extra)
 medallion_job = define_asset_job(
     name="medallion_hello_world",
-    selection=AssetSelection.all(),
+    selection=AssetSelection.all() - football_assets,
     description="End-to-end: ingest raw users -> dbt silver/gold (+tests) -> gold Parquet.",
 )
 
@@ -41,7 +45,7 @@ daily_schedule = ScheduleDefinition(
 # throttled client). Pacing (0.4s) applies to discovery + file GETs within each run.
 football_backfill_job = define_asset_job(
     name="football_backfill",
-    selection=AssetSelection.assets(football_main, football_extra),
+    selection=football_assets,
     description="Backfill football-data.co.uk main + extra bronze Parquet over the registry.",
 )
 

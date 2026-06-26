@@ -102,3 +102,14 @@ def test_definitions_registers_football_assets_resource_and_job() -> None:
 
     job_names = {job.name for job in defs.jobs}
     assert "football_backfill" in job_names
+
+    # The football assets must be their own job and EXCLUDED from the all()-based
+    # hello-world job (and thus its schedule), or running the demo would trigger the
+    # ~705-file backfill.
+    def _keys(job_name: str) -> set[str]:
+        job = defs.get_job_def(job_name)
+        return {"/".join(k.path) for k in job.asset_layer.executable_asset_keys}
+
+    football = {"football_main", "football_extra"}
+    assert _keys("football_backfill") == football
+    assert not (_keys("medallion_hello_world") & football), "football excluded from hello-world"

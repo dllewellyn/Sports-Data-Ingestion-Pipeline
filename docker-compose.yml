@@ -30,20 +30,23 @@ x-app: &app
 
 services:
   # Dagster UI (asset graph, runs, logs). Reachable from another machine on :3000.
+  # Loads the SAME workspace.yaml as the daemon so queued runs can be launched.
   dagster-webserver:
     <<: *app
     command: >
       sh -c "cd /app/dbt/data_platform && dbt parse --profiles-dir . &&
-             cd /app && dagster-webserver -h 0.0.0.0 -p 3000 -m data_platform.definitions"
+             cd /app && dagster-webserver -h 0.0.0.0 -p 3000 -w /app/workspace.yaml"
     ports:
       - "3000:3000"
 
-  # Dagster daemon: runs schedules, sensors, and the run queue.
+  # Dagster daemon: runs schedules, sensors, and the run queue. MUST load the same
+  # workspace.yaml as the webserver, or it dequeues runs into an empty workspace and
+  # fails with "Location data_platform.definitions does not exist in workspace".
   dagster-daemon:
     <<: *app
     command: >
       sh -c "cd /app/dbt/data_platform && dbt parse --profiles-dir . &&
-             cd /app && dagster-daemon run"
+             cd /app && dagster-daemon run -w /app/workspace.yaml"
 
   # JupyterLab, reachable from another machine on :8888 (token-protected).
   jupyter:
