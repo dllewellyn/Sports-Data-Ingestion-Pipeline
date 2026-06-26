@@ -17,6 +17,13 @@ class Settings(BaseSettings):
     # Source
     api_base_url: str = "https://jsonplaceholder.typicode.com"
 
+    # football-data.co.uk ingestion (bronze source)
+    football_base_url: str = "https://www.football-data.co.uk/"
+    football_throttle_seconds: float = 0.4  # polite pacing between outbound requests
+    football_request_timeout: float = 60.0
+    football_max_retries: int = 3  # bounded retry for transient errors (then surface)
+    football_user_agent: str = "data-platform/0.1 (+football-data ingestion)"
+
     # Medallion layout
     data_dir: Path = Path("data")
     duckdb_path: Path = Path("data/warehouse.duckdb")
@@ -37,6 +44,16 @@ class Settings(BaseSettings):
     @property
     def gold_dir(self) -> Path:
         return self.data_dir / "gold"
+
+    @property
+    def football_main_dir(self) -> Path:
+        """Bronze partition root for the main family (football_main/<league>/...)."""
+        return self.bronze_dir / "football_main"
+
+    @property
+    def football_extra_dir(self) -> Path:
+        """Bronze partition root for the extra family (football_extra/<code>.parquet)."""
+        return self.bronze_dir / "football_extra"
 
 
 settings = Settings()
