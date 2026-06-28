@@ -52,6 +52,13 @@ by **pytest** under `tests/` (see the `pytest` command above).
 > Code/package structure, layering & dependency rules, and the "add a new data
 > source" guide live in [`ARCHITECTURE.md`](ARCHITECTURE.md). The notes below are
 > the *runtime gotchas*; keep structural facts in ARCHITECTURE.md, not here.
+>
+> The relational **data model** (canonical entities + provider linking tables) is
+> documented in [`ERD.md`](ERD.md) — it is living documentation: when you add or
+> change a canonical/link table (or a dbt model under `models/silver/canonical/`),
+> update `ERD.md` in the same commit. Note `ERD.md` was ported from the upstream
+> Postgres gaming-engine; this repo materializes that model in DuckDB (see the
+> storage-engine note in `ERD.md` and the constraint below).
 
 Medallion pipeline orchestrated by Dagster, transformed/tested by dbt on DuckDB,
 every layer persisted as Parquet, traced via OpenTelemetry → SigNoz.
@@ -78,6 +85,18 @@ raw_users ──▶ silver/stg_users ──▶ gold/dim_users_by_city ──▶ 
   "schema does not exist" catalog errors. Produce derived Parquet *inside dbt*
   (the `external` materialization in `gold/users_by_city_export.sql`) and have
   Python read the resulting **file**, not the warehouse table.
+- **The canonical domain schema lives as dbt models, not raw DDL.** `team`,
+  `league`, `match`, and the `*_match_link`/`*_event_link` tables are dbt models
+  under `dbt/data_platform/models/silver/canonical/` — typed **empty** scaffolds
+  (`select cast(null as <type>) as col … limit 0`, `+materialized: table`) until a
+  conform layer populates them. Don't create/alter them with a raw DuckDB
+  connection — that reintroduces the second-writer problem above. (`ERD.md` is the
+  Postgres-flavoured source spec; this repo realises it in DuckDB.)
+- **`dbt build` is NOT green from a clean checkout.** `stg_users` (and the gold
+  models) read `data/bronze/users.parquet`, which the Dagster `bronze` asset must
+  materialize first; without it dbt fails with `IO Error: No files found …
+  users.parquet`. This is environmental (no data yet), not a regression — run the
+  ingest before `dbt build`, or expect that one model to error while the rest pass.
 - **dbt model asset keys are prefixed by their model subfolder**, e.g.
   `AssetKey(["gold", "users_by_city_export"])`, not `["users_by_city_export"]`.
   Cross-asset `deps=[...]` in Python assets must use the prefixed key or the

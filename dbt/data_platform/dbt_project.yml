@@ -17,6 +17,10 @@ models:
     silver:
       +materialized: view
       +schema: silver
+      # Canonical domain tables (team/league/match + link tables) are real,
+      # writable relations, not transforms — materialize them as tables.
+      canonical:
+        +materialized: table
     gold:
       +materialized: table
       +schema: gold

@@ -1,0 +1,87 @@
+version: 2
+
+models:
+  - name: team
+    description: "Canonical team entity (silver). Typed empty scaffold."
+    columns:
+      - name: team_id
+        description: "Internal canonical team identifier."
+        data_tests:
+          - not_null
+          - unique
+      - name: name
+        description: "Primary display name."
+      - name: similar_names
+        description: "Alternative names/aliases (list)."
+
+  - name: league
+    description: "Canonical competition entity (silver). Typed empty scaffold."
+    columns:
+      - name: league_id
+        description: "Internal canonical competition identifier."
+        data_tests:
+          - not_null
+          - unique
+      - name: is_tournament
+        description: "True for knockout/group tournaments."
+
+  - name: match
+    description: "Canonical fixture entity (silver). Typed empty scaffold."
+    columns:
+      - name: match_id
+        description: "Internal canonical fixture identifier."
+        data_tests:
+          - not_null
+          - unique
+      - name: league_id
+        description: "FK -> league.league_id."
+      - name: home_team_id
+        description: "FK -> team.team_id (home)."
+      - name: away_team_id
+        description: "FK -> team.team_id (away)."
+
+  - name: espn_match_link
+    description: "Maps a canonical match to an ESPN event."
+    columns:
+      - name: link_id
+        data_tests:
+          - not_null
+          - unique
+      - name: match_id
+        description: "FK -> match.match_id."
+
+  - name: matchbook_event_link
+    description: "Maps a canonical match to a Matchbook exchange event."
+    columns:
+      - name: link_id
+        data_tests:
+          - not_null
+          - unique
+      - name: match_id
+        description: "FK -> match.match_id."
+
+  - name: football_data_match_link
+    description: >
+      Maps a canonical match to a football-data.co.uk source row via a composite
+      natural key (the source has no stable match id).
+    columns:
+      - name: link_id
+        data_tests:
+          - not_null
+          - unique
+      - name: match_id
+        description: "FK -> match.match_id."
+      - name: family
+        description: "'main' | 'extra' (which football-data.co.uk dataset family)."
+      - name: country
+        description: "Country (extra family only; null for main)."
+      - name: division
+        description: "Div (main) / League (extra)."
+      - name: season
+        description: "Season token."
+      - name: match_date
+        description: "Raw source match date."
+      - name: home_team
+        description: "Raw source home team name."
+      - name: away_team
+        description: "Raw source away team name."

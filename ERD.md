@@ -6,7 +6,7 @@ description: Entity relationship diagram defining core domain entities, physical
 
 # Core Entity Relationship Diagram (ERD)
 
-This document defines the relational data model for Project Panic Play. To maintain clean boundaries across heterogeneous betting exchanges and data feeds, the system establishes a canonical domain model comprising **Teams**, **Leagues** (including tournaments), and **Matches**, bridged to external APIs via dedicated linking tables. 
+This document defines the relational data model for Project Panic Play. To maintain clean boundaries across heterogeneous betting exchanges and data feeds, the system establishes a canonical domain model comprising **Teams**, **Leagues** (including tournaments), and **Matches**, bridged to external APIs via dedicated linking tables.
 
 Furthermore, it details the **Matchbook Data Ingestion Pipeline**, illustrating how raw high-frequency price ticks stored in Apache Parquet files connect to Postgres catalogue and provider cache tables.
 
@@ -14,7 +14,7 @@ Furthermore, it details the **Matchbook Data Ingestion Pipeline**, illustrating 
 
 ## Implementation Status: Physical vs. Conceptual
 
-A key architectural distinction in Panic Play is between **conceptual domain abstractions** (canonical target structures) and **concrete physical storage tables** currently implemented in the database schema. 
+A key architectural distinction in Panic Play is between **conceptual domain abstractions** (canonical target structures) and **concrete physical storage tables** currently implemented in the database schema.
 
 Rather than maintaining separate bespoke tables for every provider entity (e.g., `espn_match_link`, `betfair_match_link`), the physical schema utilizes **high-performance polymorphic caching and linking tables** (`bronze.provider_match_cache` and `bronze.provider_links`).
 
@@ -25,10 +25,19 @@ Rather than maintaining separate bespoke tables for every provider entity (e.g.,
 | `match` (`silver.match`) | Postgres | **Physical Table Exists** | Distinct canonical table in `silver.match` (accessible via `bronze.match` view). |
 | `espn_match_link` (`silver.espn_match_link`) | Postgres | **Physical Table Exists** | Distinct canonical linking table in `silver.espn_match_link` (accessible via `bronze.espn_match_link` view). |
 | `matchbook_event_link` (`silver.matchbook_event_link`) | Postgres | **Physical Table Exists** | Distinct canonical linking table in `silver.matchbook_event_link` (accessible via `bronze.matchbook_event_link` view). |
+| `football_data_match_link` (`silver.football_data_match_link`) | DuckDB | **Physical Table Exists** | Linking table mapping canonical matches to football-data.co.uk source rows via a **composite natural key** (the source exposes no stable match id). Materialized in this repo's dbt-owned DuckDB warehouse (`models/silver/canonical/`). |
 | `bronze.provider_match_cache` | Postgres | **Physical Table Exists** | Active ingestion table storing fixture snapshots per provider (`provider_id = event_id`). |
 | `bronze.matchbook_market_catalogue`| Postgres | **Physical Table Exists** | Active ingestion table storing Matchbook market definitions and trading status. |
 | `bronze.matchbook_runner_catalogue`| Postgres | **Physical Table Exists** | Active ingestion table storing runner/selection metadata and sorting priority. |
 | `matchbook_odds` | Parquet Lake | **Physical Lake Exists** | Active high-frequency price tick streams written to disk at `/app/data/lake/silver/matchbook_odds/`. |
+
+> **Storage-engine note:** the Postgres references above describe the canonical
+> model as ported from the upstream gaming-engine project. In *this* repository the
+> canonical schema (`team`, `league`, `match`, `espn_match_link`,
+> `matchbook_event_link`, `football_data_match_link`) is materialized in the
+> **dbt-owned DuckDB warehouse** as typed dbt models under
+> `dbt/data_platform/models/silver/canonical/` (currently empty scaffolds; a later
+> conform layer populates them from the football-data.co.uk bronze Parquet).
 
 ---
 
@@ -42,11 +51,12 @@ erDiagram
     TEAM |o--o{ MATCH : "favourite (T-45m)"
     MATCH ||--o{ ESPN_MATCH_LINK : "mapped via"
     MATCH ||--o{ MATCHBOOK_EVENT_LINK : "mapped via"
-    
+    MATCH ||--o{ FOOTBALL_DATA_MATCH_LINK : "mapped via"
+
     MATCHBOOK_EVENT_LINK |o--o| MATCHBOOK_PROVIDER_CACHE : "event_id = provider_id"
     MATCHBOOK_PROVIDER_CACHE ||--o{ MATCHBOOK_MARKET_CATALOGUE : "provider_id = event_id"
     MATCHBOOK_MARKET_CATALOGUE ||--o{ MATCHBOOK_RUNNER_CATALOGUE : "market_id"
-    
+
     MATCHBOOK_PROVIDER_CACHE ||--o{ MATCHBOOK_ODDS_PARQUET : "provider_id = event_id"
     MATCHBOOK_MARKET_CATALOGUE ||--o{ MATCHBOOK_ODDS_PARQUET : "market_id"
     MATCHBOOK_RUNNER_CATALOGUE ||--o{ MATCHBOOK_ODDS_PARQUET : "selection_id = runner_id"
@@ -81,6 +91,17 @@ erDiagram
         string link_id PK
         string match_id FK
         string matchbook_event_id
+    }
+    FOOTBALL_DATA_MATCH_LINK {
+        string link_id PK
+        string match_id FK
+        string family
+        string country
+        string division
+        string season
+        string match_date
+        string home_team
+        string away_team
     }
     MATCHBOOK_PROVIDER_CACHE {
         string provider PK
@@ -177,6 +198,31 @@ Maps internal canonical matches to Matchbook exchange events for trading and odd
 | `link_id` | `VARCHAR` | No (PK) | Primary key for the mapping record. |
 | `match_id` | `VARCHAR` | No (FK) | References canonical `match.match_id`. |
 | `matchbook_event_id` | `VARCHAR` | No | External event ID provided by the Matchbook API (`event_id`). |
+
+### `football_data_match_link` *(Physical DuckDB Table Exists: `silver.football_data_match_link`)*
+Maps internal canonical matches to source rows from **football-data.co.uk** (the
+historical results/odds CSV feed ingested by this repo's bronze layer).
+
+Unlike ESPN and Matchbook, football-data.co.uk exposes **no stable per-match
+identifier**, so the external reference is a **composite natural key** rather than a
+single id column. The key columns mirror the two raw bronze record cores in
+`src/data_platform/models/schemas.py` — `MainMatchRecord` (`Div`, `Date`,
+`HomeTeam`, `AwayTeam`) and `ExtraMatchRecord` (`Country`, `League`, `Season`,
+`Date`, `Home`, `Away`) — unified into one shape. Uniqueness of
+`(family, country, division, season, match_date, home_team, away_team)` is asserted
+by a dbt test.
+
+| Attribute | Type | Nullable | Description |
+| :--- | :--- | :--- | :--- |
+| `link_id` | `VARCHAR` | No (PK) | Primary key for the mapping record. |
+| `match_id` | `VARCHAR` | No (FK) | References canonical `match.match_id`. |
+| `family` | `VARCHAR` | No | Football-data.co.uk dataset family: `'main'` or `'extra'`. |
+| `country` | `VARCHAR` | Yes | Country (extra family only; `null` for main, where the league directory implies it). |
+| `division` | `VARCHAR` | No | `Div` for main (e.g. `'E0'`) / `League` for extra. |
+| `season` | `VARCHAR` | No | Season token (e.g. `'2324'` from the URL path, or in-file `Season` for extra). |
+| `match_date` | `VARCHAR` | No | Raw source match date as supplied by the CSV. |
+| `home_team` | `VARCHAR` | No | Raw source home team name (`HomeTeam` / `Home`). |
+| `away_team` | `VARCHAR` | No | Raw source away team name (`AwayTeam` / `Away`). |
 
 ---
 
