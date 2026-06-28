@@ -25,6 +25,21 @@ models:
       - name: is_tournament
         description: "True for knockout/group tournaments."
 
+  - name: season
+    description: >
+      Canonical season/edition of a competition (silver). One row per edition of
+      a league (e.g. the 2025-2026 Premier League). Typed empty scaffold.
+    columns:
+      - name: season_id
+        description: "Internal canonical season identifier."
+        data_tests:
+          - not_null
+          - unique
+      - name: league_id
+        description: "FK -> league.league_id."
+      - name: name
+        description: "Season label (e.g. '2025-2026' / '2026')."
+
   - name: match
     description: "Canonical fixture entity (silver). Typed empty scaffold."
     columns:
@@ -33,8 +48,8 @@ models:
         data_tests:
           - not_null
           - unique
-      - name: league_id
-        description: "FK -> league.league_id."
+      - name: season_id
+        description: "FK -> season.season_id (league reached via season.league_id)."
       - name: home_team_id
         description: "FK -> team.team_id (home)."
       - name: away_team_id

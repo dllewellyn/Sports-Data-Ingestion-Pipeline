@@ -6,7 +6,7 @@ description: Entity relationship diagram defining core domain entities, physical
 
 # Core Entity Relationship Diagram (ERD)
 
-This document defines the relational data model for Project Panic Play. To maintain clean boundaries across heterogeneous betting exchanges and data feeds, the system establishes a canonical domain model comprising **Teams**, **Leagues** (including tournaments), and **Matches**, bridged to external APIs via dedicated linking tables.
+This document defines the relational data model for Project Panic Play. To maintain clean boundaries across heterogeneous betting exchanges and data feeds, the system establishes a canonical domain model comprising **Teams**, **Leagues** (including tournaments), **Seasons** (one edition of a league), and **Matches**, bridged to external APIs via dedicated linking tables.
 
 Furthermore, it details the **Matchbook Data Ingestion Pipeline**, illustrating how raw high-frequency price ticks stored in Apache Parquet files connect to Postgres catalogue and provider cache tables.
 
@@ -22,7 +22,8 @@ Rather than maintaining separate bespoke tables for every provider entity (e.g.,
 | :--- | :--- | :--- | :--- |
 | `team` (`silver.team`) | Postgres | **Physical Table Exists** | Distinct canonical table in `silver.team` (accessible via `bronze.team` view). Also cached in `bronze.provider_entity_cache`. |
 | `league` (`silver.league`) | Postgres | **Physical Table Exists** | Distinct canonical table in `silver.league` (accessible via `bronze.league` view). Also cached in `bronze.provider_entity_cache`. |
-| `match` (`silver.match`) | Postgres | **Physical Table Exists** | Distinct canonical table in `silver.match` (accessible via `bronze.match` view). |
+| `season` (`silver.season`) | DuckDB | **Physical Table Exists** | One edition of a competition (`season.league_id` → `league.league_id`). Materialized in this repo's dbt-owned DuckDB warehouse (`models/silver/canonical/season.sql`). |
+| `match` (`silver.match`) | Postgres | **Physical Table Exists** | Distinct canonical table in `silver.match` (accessible via `bronze.match` view). Belongs to a `season` (`match.season_id`); the league is reached via `season.league_id`. |
 | `espn_match_link` (`silver.espn_match_link`) | Postgres | **Physical Table Exists** | Distinct canonical linking table in `silver.espn_match_link` (accessible via `bronze.espn_match_link` view). |
 | `matchbook_event_link` (`silver.matchbook_event_link`) | Postgres | **Physical Table Exists** | Distinct canonical linking table in `silver.matchbook_event_link` (accessible via `bronze.matchbook_event_link` view). |
 | `football_data_match_link` (`silver.football_data_match_link`) | DuckDB | **Physical Table Exists** | Linking table mapping canonical matches to football-data.co.uk source rows via a **composite natural key** (the source exposes no stable match id). Materialized in this repo's dbt-owned DuckDB warehouse (`models/silver/canonical/`). |
@@ -33,7 +34,7 @@ Rather than maintaining separate bespoke tables for every provider entity (e.g.,
 
 > **Storage-engine note:** the Postgres references above describe the canonical
 > model as ported from the upstream gaming-engine project. In *this* repository the
-> canonical schema (`team`, `league`, `match`, `espn_match_link`,
+> canonical schema (`team`, `league`, `season`, `match`, `espn_match_link`,
 > `matchbook_event_link`, `football_data_match_link`) is materialized in the
 > **dbt-owned DuckDB warehouse** as typed dbt models under
 > `dbt/data_platform/models/silver/canonical/` (currently empty scaffolds; a later
@@ -45,7 +46,8 @@ Rather than maintaining separate bespoke tables for every provider entity (e.g.,
 
 ```mermaid
 erDiagram
-    LEAGUE ||--o{ MATCH : contains
+    LEAGUE ||--o{ SEASON : "has edition"
+    SEASON ||--o{ MATCH : contains
     TEAM ||--o{ MATCH : "home team"
     TEAM ||--o{ MATCH : "away team"
     TEAM |o--o{ MATCH : "favourite (T-45m)"
@@ -68,13 +70,19 @@ erDiagram
     }
     LEAGUE {
         string league_id PK
-        string season_id
         string name
         boolean is_tournament
     }
+    SEASON {
+        string season_id PK
+        string league_id FK
+        string name
+        date start_date
+        date end_date
+    }
     MATCH {
         string match_id PK
-        string league_id FK
+        string season_id FK
         string home_team_id FK
         string away_team_id FK
         string favourite_team_id FK
@@ -152,22 +160,32 @@ Represents a sporting participant or national squad. Implemented as a distinct c
 | `similar_names` | `VARCHAR[]` / `JSONB` | Yes | List of alternative names and aliases used across feeds (e.g., `["USA", "United States of America", "USMNT"]`). |
 
 ### `league` *(Physical Table Exists: `silver.league` / `bronze.league`)*
-Represents a structured sports competition, covering both standard seasonal league formats and cup/knockout tournaments. Implemented as a distinct canonical table in `silver.league` with a view in `bronze.league`.
+Represents a structured sports competition, covering both standard seasonal league formats and cup/knockout tournaments. The competition is edition-agnostic — each edition is a separate `season` row. Implemented as a distinct canonical table in `silver.league` with a view in `bronze.league`.
 
 | Attribute | Type | Nullable | Description |
 | :--- | :--- | :--- | :--- |
 | `league_id` | `VARCHAR` | No (PK) | Unique internal identifier for the competition. |
-| `season_id` | `VARCHAR` | No | Unique identifier per season or edition (e.g., `"2025-2026"` or `"2026"`). |
 | `name` | `VARCHAR` | No | Display name of the competition (e.g., `"Premier League"`, `"World Cup"`). |
 | `is_tournament` | `BOOLEAN` | No | `true` if the competition is a knockout/group tournament rather than a regular league table. |
 
+### `season` *(Physical DuckDB Table Exists: `silver.season`)*
+Represents a single **edition** of a competition (e.g. the 2025-2026 Premier League, or the 2026 World Cup). One `league` has many `season`s; a `match` belongs to a `season`, and the owning league is reached transitively via `season.league_id`. Provider season tokens (e.g. football-data.co.uk's `"2324"`) are resolved to a canonical `season_id` by the conform layer.
+
+| Attribute | Type | Nullable | Description |
+| :--- | :--- | :--- | :--- |
+| `season_id` | `VARCHAR` | No (PK) | Unique internal identifier for the season/edition. |
+| `league_id` | `VARCHAR` | No (FK) | References `league.league_id` — the competition this is an edition of. |
+| `name` | `VARCHAR` | No | Season label (e.g., `"2025-2026"` or `"2026"`). |
+| `start_date` | `DATE` | Yes | First day of the season. |
+| `end_date` | `DATE` | Yes | Last day of the season. |
+
 ### `match` *(Physical Table Exists: `silver.match` / `bronze.match`)*
-The central fixture entity linking participants within a league context. Implemented as a distinct canonical table in `silver.match` with a view in `bronze.match`.
+The central fixture entity linking participants within a season context. Implemented as a distinct canonical table in `silver.match` with a view in `bronze.match`.
 
 | Attribute | Type | Nullable | Description |
 | :--- | :--- | :--- | :--- |
 | `match_id` | `VARCHAR` | No (PK) | Unique canonical identifier for the fixture. |
-| `league_id` | `VARCHAR` | No (FK) | References `league.league_id`. |
+| `season_id` | `VARCHAR` | No (FK) | References `season.season_id`. The competition is reached via `season.league_id`. |
 | `home_team_id` | `VARCHAR` | No (FK) | References `team.team_id` for the home participant. |
 | `away_team_id` | `VARCHAR` | No (FK) | References `team.team_id` for the away participant. |
 | `favourite_team_id` | `VARCHAR` | Yes (FK) | References `team.team_id` for the market favourite, captured exactly **T-45 minutes** before scheduled kickoff. |
