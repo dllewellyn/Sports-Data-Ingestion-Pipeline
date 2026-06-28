@@ -35,7 +35,7 @@ import logging
 import os
 import signal
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import pyarrow as pa
@@ -43,11 +43,9 @@ import pyarrow.parquet as pq
 import redis
 
 try:
-    from .schema import DEDUP_FIELDS as _DEDUP_FIELDS
     from .schema import SCHEMA
 except ImportError:
     # Fallback for direct execution: python -m ingestor.direct_parquet_consumer
-    from schema import DEDUP_FIELDS as _DEDUP_FIELDS  # type: ignore[no-redef]
     from schema import SCHEMA  # type: ignore[no-redef]
 
 logger = logging.getLogger("ingestor.parquet")
@@ -120,7 +118,7 @@ class DirectParquetConsumer:
         ``json.loads``: bools, ints, floats, and ``None`` for JSON null.
         """
         try:
-            event_id  = int(msg["event_id"])
+            event_id = int(msg["event_id"])
             market_id = int(msg["market_id"])
             runner_id = int(msg["runner_id"])
         except (KeyError, ValueError, TypeError):
@@ -147,42 +145,40 @@ class DirectParquetConsumer:
         self._dedup[key] = state
 
         ts_ns = msg.get("timestamp_ns")
-        ingested_at = (
-            int(ts_ns) // 1_000_000
-            if ts_ns is not None
-            else int(time.time() * 1000)
-        )
+        ingested_at = int(ts_ns) // 1_000_000 if ts_ns is not None else int(time.time() * 1000)
 
-        self._buffer.append({
-            "event_id":              event_id,
-            "market_id":             market_id,
-            "runner_id":             runner_id,
-            "ingested_at":           ingested_at,
-            "sport_id":              _coerce_int(msg.get("sport_id")),
-            "market_type":           msg.get("market_type"),
-            "market_status":         msg.get("market_status"),
-            "in_running":            bool(msg.get("in_running")),
-            "best_back_price":       _coerce_float(msg.get("best_back_price")),
-            "best_back_available":   _coerce_float(msg.get("best_back_available")),
-            "best_lay_price":        _coerce_float(msg.get("best_lay_price")),
-            "best_lay_available":    _coerce_float(msg.get("best_lay_available")),
-            "back_price_2":          _coerce_float(msg.get("back_price_2")),
-            "back_available_2":      _coerce_float(msg.get("back_available_2")),
-            "back_price_3":          _coerce_float(msg.get("back_price_3")),
-            "back_available_3":      _coerce_float(msg.get("back_available_3")),
-            "lay_price_2":           _coerce_float(msg.get("lay_price_2")),
-            "lay_available_2":       _coerce_float(msg.get("lay_available_2")),
-            "lay_price_3":           _coerce_float(msg.get("lay_price_3")),
-            "lay_available_3":       _coerce_float(msg.get("lay_available_3")),
-            "back_depth":            _coerce_float(msg.get("back_depth")),
-            "lay_depth":             _coerce_float(msg.get("lay_depth")),
-            "wom":                   _coerce_float(msg.get("wom")),
-            "market_volume":         _coerce_float(msg.get("market_volume")),
-            "runner_volume":         _coerce_float(msg.get("runner_volume")),
-            "handicap_line":         _coerce_float(msg.get("handicap_line")),  # None if JSON null
-            "event_participant_id":  _coerce_int(msg.get("event_participant_id")),
-            "kickoff_ms":            _coerce_int(msg.get("kickoff_ms")),
-        })
+        self._buffer.append(
+            {
+                "event_id": event_id,
+                "market_id": market_id,
+                "runner_id": runner_id,
+                "ingested_at": ingested_at,
+                "sport_id": _coerce_int(msg.get("sport_id")),
+                "market_type": msg.get("market_type"),
+                "market_status": msg.get("market_status"),
+                "in_running": bool(msg.get("in_running")),
+                "best_back_price": _coerce_float(msg.get("best_back_price")),
+                "best_back_available": _coerce_float(msg.get("best_back_available")),
+                "best_lay_price": _coerce_float(msg.get("best_lay_price")),
+                "best_lay_available": _coerce_float(msg.get("best_lay_available")),
+                "back_price_2": _coerce_float(msg.get("back_price_2")),
+                "back_available_2": _coerce_float(msg.get("back_available_2")),
+                "back_price_3": _coerce_float(msg.get("back_price_3")),
+                "back_available_3": _coerce_float(msg.get("back_available_3")),
+                "lay_price_2": _coerce_float(msg.get("lay_price_2")),
+                "lay_available_2": _coerce_float(msg.get("lay_available_2")),
+                "lay_price_3": _coerce_float(msg.get("lay_price_3")),
+                "lay_available_3": _coerce_float(msg.get("lay_available_3")),
+                "back_depth": _coerce_float(msg.get("back_depth")),
+                "lay_depth": _coerce_float(msg.get("lay_depth")),
+                "wom": _coerce_float(msg.get("wom")),
+                "market_volume": _coerce_float(msg.get("market_volume")),
+                "runner_volume": _coerce_float(msg.get("runner_volume")),
+                "handicap_line": _coerce_float(msg.get("handicap_line")),  # None if JSON null
+                "event_participant_id": _coerce_int(msg.get("event_participant_id")),
+                "kickoff_ms": _coerce_int(msg.get("kickoff_ms")),
+            }
+        )
 
     def _build_dedup_state(self, msg: dict[str, str]) -> tuple:
         return (
@@ -202,7 +198,7 @@ class DirectParquetConsumer:
 
     def _process_message(self, msg: dict[str, str]) -> None:
         try:
-            event_id  = int(msg["event_id"])
+            event_id = int(msg["event_id"])
             market_id = int(msg["market_id"])
             runner_id = int(msg["runner_id"])
         except (KeyError, ValueError):
@@ -222,36 +218,38 @@ class DirectParquetConsumer:
             else int(time.time() * 1000)
         )
 
-        self._buffer.append({
-            "event_id":             event_id,
-            "market_id":            market_id,
-            "runner_id":            runner_id,
-            "ingested_at":          ingested_at,
-            "sport_id":             _int(msg, "sport_id"),
-            "market_type":          msg.get("market_type"),
-            "market_status":        msg.get("market_status"),
-            "in_running":           msg.get("in_running") in ("true", "True", True),
-            "best_back_price":      _float(msg, "best_back_price"),
-            "best_back_available":  _float(msg, "best_back_available"),
-            "best_lay_price":       _float(msg, "best_lay_price"),
-            "best_lay_available":   _float(msg, "best_lay_available"),
-            "back_price_2":         _float(msg, "back_price_2"),
-            "back_available_2":     _float(msg, "back_available_2"),
-            "back_price_3":         _float(msg, "back_price_3"),
-            "back_available_3":     _float(msg, "back_available_3"),
-            "lay_price_2":          _float(msg, "lay_price_2"),
-            "lay_available_2":      _float(msg, "lay_available_2"),
-            "lay_price_3":          _float(msg, "lay_price_3"),
-            "lay_available_3":      _float(msg, "lay_available_3"),
-            "back_depth":           _float(msg, "back_depth"),
-            "lay_depth":            _float(msg, "lay_depth"),
-            "wom":                  _float(msg, "wom"),
-            "market_volume":        _float(msg, "market_volume"),
-            "runner_volume":        _float(msg, "runner_volume"),
-            "handicap_line":        _optional_float(msg, "handicap_line"),
-            "event_participant_id": _int(msg, "event_participant_id"),
-            "kickoff_ms":           _int(msg, "kickoff_ms"),
-        })
+        self._buffer.append(
+            {
+                "event_id": event_id,
+                "market_id": market_id,
+                "runner_id": runner_id,
+                "ingested_at": ingested_at,
+                "sport_id": _int(msg, "sport_id"),
+                "market_type": msg.get("market_type"),
+                "market_status": msg.get("market_status"),
+                "in_running": msg.get("in_running") in ("true", "True", True),
+                "best_back_price": _float(msg, "best_back_price"),
+                "best_back_available": _float(msg, "best_back_available"),
+                "best_lay_price": _float(msg, "best_lay_price"),
+                "best_lay_available": _float(msg, "best_lay_available"),
+                "back_price_2": _float(msg, "back_price_2"),
+                "back_available_2": _float(msg, "back_available_2"),
+                "back_price_3": _float(msg, "back_price_3"),
+                "back_available_3": _float(msg, "back_available_3"),
+                "lay_price_2": _float(msg, "lay_price_2"),
+                "lay_available_2": _float(msg, "lay_available_2"),
+                "lay_price_3": _float(msg, "lay_price_3"),
+                "lay_available_3": _float(msg, "lay_available_3"),
+                "back_depth": _float(msg, "back_depth"),
+                "lay_depth": _float(msg, "lay_depth"),
+                "wom": _float(msg, "wom"),
+                "market_volume": _float(msg, "market_volume"),
+                "runner_volume": _float(msg, "runner_volume"),
+                "handicap_line": _optional_float(msg, "handicap_line"),
+                "event_participant_id": _int(msg, "event_participant_id"),
+                "kickoff_ms": _int(msg, "kickoff_ms"),
+            }
+        )
 
     def _flush(self) -> None:
         if not self._buffer:
@@ -267,6 +265,7 @@ class DirectParquetConsumer:
 
 
 # ── Arrow helpers ──────────────────────────────────────────────────────────────
+
 
 def _rows_to_arrow(rows: list[dict[str, Any]]) -> pa.Table:
     columns: dict[str, list] = {field.name: [] for field in SCHEMA}
@@ -286,9 +285,11 @@ def _rows_to_arrow(rows: list[dict[str, Any]]) -> pa.Table:
 
 
 def _write_parquet(table: pa.Table, lake_root: str) -> None:
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     dest_dir = os.path.join(
-        lake_root, "silver", "matchbook_odds",
+        lake_root,
+        "silver",
+        "matchbook_odds",
         f"year={now.year}",
         f"month={now.month:02d}",
         f"day={now.day:02d}",
@@ -299,6 +300,7 @@ def _write_parquet(table: pa.Table, lake_root: str) -> None:
 
 
 # ── Parsing helpers ────────────────────────────────────────────────────────────
+
 
 def _coerce_float(v: Any) -> float | None:
     """Coerce a native Python value (from JSON) to float, or None."""

@@ -14,10 +14,10 @@ import pyarrow as pa
 _SCHEMA_PATH = Path(__file__).with_name("matchbook_odds_schema.json")
 
 _ARROW_TYPE_MAP: dict[str, pa.DataType] = {
-    "int64":              pa.int64(),
-    "float64":            pa.float64(),
-    "string":             pa.string(),
-    "bool":               pa.bool_(),
+    "int64": pa.int64(),
+    "float64": pa.float64(),
+    "string": pa.string(),
+    "bool": pa.bool_(),
     "timestamp[ms, UTC]": pa.timestamp("ms", tz="UTC"),
 }
 
