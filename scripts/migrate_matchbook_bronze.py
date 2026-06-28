@@ -120,7 +120,7 @@ def main() -> None:
             / f"year={y}"
             / f"month={m:02d}"
             / f"day={d:02d}"
-            / f"part-{src.stem}.parquet"
+            / src.name
         )
 
         if dest.exists():
