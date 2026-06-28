@@ -1,8 +1,9 @@
 """
-Direct Parquet Lakehouse Ingestor
-==================================
-Reads the ``matchbook_odds_stream`` Redis channel and writes Silver-grade
-Parquet files to the local NVMe lakehouse at ``/app/data/lake/silver/matchbook_odds/``.
+Direct Parquet Bronze Ingestor
+==============================
+Reads the ``matchbook_odds_stream`` Redis channel and writes ZSTD-compressed
+Parquet files to the bronze layer at
+``<bronze_dir>/matchbook_odds/year=YYYY/month=MM/day=DD/part-<ts>.parquet``.
 
 Runs as a long-lived daemon alongside the existing Kotlin JSONL pipeline — both
 consumers subscribe to the same Redis channel so there is no data loss during
@@ -32,23 +33,20 @@ On SIGTERM / SIGINT the buffer is flushed before exit so no ticks are lost.
 
 import json
 import logging
-import os
 import signal
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 import redis
+from pydantic import ValidationError
 
-try:
-    from .schema import DEDUP_FIELDS as _DEDUP_FIELDS
-    from .schema import SCHEMA
-except ImportError:
-    # Fallback for direct execution: python -m ingestor.direct_parquet_consumer
-    from schema import DEDUP_FIELDS as _DEDUP_FIELDS  # type: ignore[no-redef]
-    from schema import SCHEMA  # type: ignore[no-redef]
+from data_platform.config import settings
+from data_platform.matchbook.ingestor.schema import SCHEMA
+from data_platform.models.schemas import MatchbookOddsRecord
 
 logger = logging.getLogger("ingestor.parquet")
 
@@ -59,12 +57,14 @@ FLUSH_INTERVAL_S = 60
 class DirectParquetConsumer:
     def __init__(
         self,
-        redis_host: str = "redis",
-        redis_port: int = 6379,
-        lake_root: str = "/app/data/lake",
+        redis_host: str | None = None,
+        redis_port: int | None = None,
+        bronze_dir: Path | None = None,
     ) -> None:
-        self._redis = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
-        self._lake_root = lake_root
+        _host = redis_host if redis_host is not None else settings.matchbook_redis_host
+        _port = redis_port if redis_port is not None else settings.matchbook_redis_port
+        self._redis = redis.Redis(host=_host, port=_port, decode_responses=True)
+        self._bronze_dir: Path = bronze_dir if bronze_dir is not None else settings.bronze_dir
         self._buffer: list[dict[str, Any]] = []
         self._dedup: dict[tuple[int, int, int], tuple] = {}
         self._last_flush = time.monotonic()
@@ -83,7 +83,7 @@ class DirectParquetConsumer:
         """Block forever, consuming the Redis pub/sub channel and writing Parquet files."""
         logger.info(
             "Starting Parquet consumer",
-            extra={"lake_root": self._lake_root},
+            extra={"bronze_dir": str(self._bronze_dir)},
         )
         pubsub = self._redis.pubsub()
         pubsub.subscribe("matchbook_odds_stream")
@@ -120,7 +120,7 @@ class DirectParquetConsumer:
         ``json.loads``: bools, ints, floats, and ``None`` for JSON null.
         """
         try:
-            event_id  = int(msg["event_id"])
+            event_id = int(msg["event_id"])
             market_id = int(msg["market_id"])
             runner_id = int(msg["runner_id"])
         except (KeyError, ValueError, TypeError):
@@ -153,36 +153,50 @@ class DirectParquetConsumer:
             else int(time.time() * 1000)
         )
 
-        self._buffer.append({
-            "event_id":              event_id,
-            "market_id":             market_id,
-            "runner_id":             runner_id,
-            "ingested_at":           ingested_at,
-            "sport_id":              _coerce_int(msg.get("sport_id")),
-            "market_type":           msg.get("market_type"),
-            "market_status":         msg.get("market_status"),
-            "in_running":            bool(msg.get("in_running")),
-            "best_back_price":       _coerce_float(msg.get("best_back_price")),
-            "best_back_available":   _coerce_float(msg.get("best_back_available")),
-            "best_lay_price":        _coerce_float(msg.get("best_lay_price")),
-            "best_lay_available":    _coerce_float(msg.get("best_lay_available")),
-            "back_price_2":          _coerce_float(msg.get("back_price_2")),
-            "back_available_2":      _coerce_float(msg.get("back_available_2")),
-            "back_price_3":          _coerce_float(msg.get("back_price_3")),
-            "back_available_3":      _coerce_float(msg.get("back_available_3")),
-            "lay_price_2":           _coerce_float(msg.get("lay_price_2")),
-            "lay_available_2":       _coerce_float(msg.get("lay_available_2")),
-            "lay_price_3":           _coerce_float(msg.get("lay_price_3")),
-            "lay_available_3":       _coerce_float(msg.get("lay_available_3")),
-            "back_depth":            _coerce_float(msg.get("back_depth")),
-            "lay_depth":             _coerce_float(msg.get("lay_depth")),
-            "wom":                   _coerce_float(msg.get("wom")),
-            "market_volume":         _coerce_float(msg.get("market_volume")),
-            "runner_volume":         _coerce_float(msg.get("runner_volume")),
-            "handicap_line":         _coerce_float(msg.get("handicap_line")),  # None if JSON null
-            "event_participant_id":  _coerce_int(msg.get("event_participant_id")),
-            "kickoff_ms":            _coerce_int(msg.get("kickoff_ms")),
-        })
+        row = {
+            "event_id": event_id,
+            "market_id": market_id,
+            "runner_id": runner_id,
+            "ingested_at": ingested_at,
+            "sport_id": _coerce_int(msg.get("sport_id")),
+            "market_type": msg.get("market_type"),
+            "market_status": msg.get("market_status"),
+            "in_running": bool(msg.get("in_running")),
+            "best_back_price": _coerce_float(msg.get("best_back_price")),
+            "best_back_available": _coerce_float(msg.get("best_back_available")),
+            "best_lay_price": _coerce_float(msg.get("best_lay_price")),
+            "best_lay_available": _coerce_float(msg.get("best_lay_available")),
+            "back_price_2": _coerce_float(msg.get("back_price_2")),
+            "back_available_2": _coerce_float(msg.get("back_available_2")),
+            "back_price_3": _coerce_float(msg.get("back_price_3")),
+            "back_available_3": _coerce_float(msg.get("back_available_3")),
+            "lay_price_2": _coerce_float(msg.get("lay_price_2")),
+            "lay_available_2": _coerce_float(msg.get("lay_available_2")),
+            "lay_price_3": _coerce_float(msg.get("lay_price_3")),
+            "lay_available_3": _coerce_float(msg.get("lay_available_3")),
+            "back_depth": _coerce_float(msg.get("back_depth")),
+            "lay_depth": _coerce_float(msg.get("lay_depth")),
+            "wom": _coerce_float(msg.get("wom")),
+            "market_volume": _coerce_float(msg.get("market_volume")),
+            "runner_volume": _coerce_float(msg.get("runner_volume")),
+            "handicap_line": _coerce_float(msg.get("handicap_line")),
+            "event_participant_id": _coerce_int(msg.get("event_participant_id")),
+            "kickoff_ms": _coerce_int(msg.get("kickoff_ms")),
+        }
+
+        try:
+            MatchbookOddsRecord.model_validate(row)
+        except ValidationError:
+            logger.warning(
+                "Dropping tick that failed schema validation: "
+                "event_id=%s market_id=%s runner_id=%s",
+                event_id,
+                market_id,
+                runner_id,
+            )
+            return
+
+        self._buffer.append(row)
 
     def _build_dedup_state(self, msg: dict[str, str]) -> tuple:
         return (
@@ -202,7 +216,7 @@ class DirectParquetConsumer:
 
     def _process_message(self, msg: dict[str, str]) -> None:
         try:
-            event_id  = int(msg["event_id"])
+            event_id = int(msg["event_id"])
             market_id = int(msg["market_id"])
             runner_id = int(msg["runner_id"])
         except (KeyError, ValueError):
@@ -223,34 +237,34 @@ class DirectParquetConsumer:
         )
 
         self._buffer.append({
-            "event_id":             event_id,
-            "market_id":            market_id,
-            "runner_id":            runner_id,
-            "ingested_at":          ingested_at,
-            "sport_id":             _int(msg, "sport_id"),
-            "market_type":          msg.get("market_type"),
-            "market_status":        msg.get("market_status"),
-            "in_running":           msg.get("in_running") in ("true", "True", True),
-            "best_back_price":      _float(msg, "best_back_price"),
-            "best_back_available":  _float(msg, "best_back_available"),
-            "best_lay_price":       _float(msg, "best_lay_price"),
-            "best_lay_available":   _float(msg, "best_lay_available"),
-            "back_price_2":         _float(msg, "back_price_2"),
-            "back_available_2":     _float(msg, "back_available_2"),
-            "back_price_3":         _float(msg, "back_price_3"),
-            "back_available_3":     _float(msg, "back_available_3"),
-            "lay_price_2":          _float(msg, "lay_price_2"),
-            "lay_available_2":      _float(msg, "lay_available_2"),
-            "lay_price_3":          _float(msg, "lay_price_3"),
-            "lay_available_3":      _float(msg, "lay_available_3"),
-            "back_depth":           _float(msg, "back_depth"),
-            "lay_depth":            _float(msg, "lay_depth"),
-            "wom":                  _float(msg, "wom"),
-            "market_volume":        _float(msg, "market_volume"),
-            "runner_volume":        _float(msg, "runner_volume"),
-            "handicap_line":        _optional_float(msg, "handicap_line"),
+            "event_id": event_id,
+            "market_id": market_id,
+            "runner_id": runner_id,
+            "ingested_at": ingested_at,
+            "sport_id": _int(msg, "sport_id"),
+            "market_type": msg.get("market_type"),
+            "market_status": msg.get("market_status"),
+            "in_running": msg.get("in_running") in ("true", "True", True),
+            "best_back_price": _float(msg, "best_back_price"),
+            "best_back_available": _float(msg, "best_back_available"),
+            "best_lay_price": _float(msg, "best_lay_price"),
+            "best_lay_available": _float(msg, "best_lay_available"),
+            "back_price_2": _float(msg, "back_price_2"),
+            "back_available_2": _float(msg, "back_available_2"),
+            "back_price_3": _float(msg, "back_price_3"),
+            "back_available_3": _float(msg, "back_available_3"),
+            "lay_price_2": _float(msg, "lay_price_2"),
+            "lay_available_2": _float(msg, "lay_available_2"),
+            "lay_price_3": _float(msg, "lay_price_3"),
+            "lay_available_3": _float(msg, "lay_available_3"),
+            "back_depth": _float(msg, "back_depth"),
+            "lay_depth": _float(msg, "lay_depth"),
+            "wom": _float(msg, "wom"),
+            "market_volume": _float(msg, "market_volume"),
+            "runner_volume": _float(msg, "runner_volume"),
+            "handicap_line": _optional_float(msg, "handicap_line"),
             "event_participant_id": _int(msg, "event_participant_id"),
-            "kickoff_ms":           _int(msg, "kickoff_ms"),
+            "kickoff_ms": _int(msg, "kickoff_ms"),
         })
 
     def _flush(self) -> None:
@@ -262,7 +276,7 @@ class DirectParquetConsumer:
         self._last_flush = time.monotonic()
 
         table = _rows_to_arrow(rows)
-        _write_parquet(table, self._lake_root)
+        _write_parquet(table, self._bronze_dir)
         logger.info("Flushed %d ticks to Parquet", len(rows))
 
 
@@ -285,17 +299,25 @@ def _rows_to_arrow(rows: list[dict[str, Any]]) -> pa.Table:
     return pa.table(arrays, schema=SCHEMA)
 
 
-def _write_parquet(table: pa.Table, lake_root: str) -> None:
-    now = datetime.now(tz=timezone.utc)
-    dest_dir = os.path.join(
-        lake_root, "silver", "matchbook_odds",
-        f"year={now.year}",
-        f"month={now.month:02d}",
-        f"day={now.day:02d}",
+def _write_parquet(table: pa.Table, bronze_dir: Path) -> None:
+    now = datetime.now(tz=UTC)
+    dest_dir = (
+        bronze_dir
+        / "matchbook_odds"
+        / f"year={now.year}"
+        / f"month={now.month:02d}"
+        / f"day={now.day:02d}"
     )
-    os.makedirs(dest_dir, exist_ok=True)
-    path = os.path.join(dest_dir, f"part-{int(time.time() * 1000)}.parquet")
-    pq.write_table(table, path, compression="zstd")
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    timestamp_ms = int(time.time() * 1000)
+    tmp = dest_dir / f"part-{timestamp_ms}.parquet.tmp"
+    try:
+        table.cast(SCHEMA)
+    except (pa.lib.ArrowInvalid, pa.lib.ArrowTypeError):
+        logger.warning("Schema cast failed — dropping batch of %d rows", len(table))
+        return
+    pq.write_table(table, tmp, compression="zstd")
+    tmp.rename(tmp.with_suffix(""))  # atomic: .parquet.tmp -> .parquet
 
 
 # ── Parsing helpers ────────────────────────────────────────────────────────────
@@ -354,21 +376,10 @@ def _int(msg: dict[str, str], key: str) -> int | None:
 # ── Entrypoint ─────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    import argparse
+    import logging
 
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s — %(message)s",
     )
-
-    parser = argparse.ArgumentParser(description="Direct Parquet lakehouse ingestor")
-    parser.add_argument("--redis-host", default=os.getenv("REDIS_HOST", "redis"))
-    parser.add_argument("--redis-port", type=int, default=int(os.getenv("REDIS_PORT", "6379")))
-    parser.add_argument("--lake-root", default=os.getenv("LAKE_ROOT", "/app/data/lake"))
-    args = parser.parse_args()
-
-    DirectParquetConsumer(
-        redis_host=args.redis_host,
-        redis_port=args.redis_port,
-        lake_root=args.lake_root,
-    ).run()
+    DirectParquetConsumer().run()
