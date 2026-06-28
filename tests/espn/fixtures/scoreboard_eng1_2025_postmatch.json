@@ -1,0 +1,60 @@
+{
+  "events": [
+    {
+      "id": "704946",
+      "date": "2025-08-16T11:30Z",
+      "season": {"year": 2025, "displayName": "2025-26"},
+      "competitions": [
+        {
+          "status": {"type": {"name": "STATUS_FINAL", "state": "post", "completed": true}},
+          "competitors": [
+            {"homeAway": "home", "team": {"id": "364", "displayName": "Liverpool", "name": "Liverpool", "shortDisplayName": "LIV"}, "score": "4"},
+            {"homeAway": "away", "team": {"id": "349", "displayName": "AFC Bournemouth", "name": "Bournemouth", "shortDisplayName": "BOU"}, "score": "2"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "704947",
+      "date": "2025-08-16T14:00Z",
+      "season": {"year": 2025, "displayName": "2025-26"},
+      "competitions": [
+        {
+          "status": {"type": {"name": "STATUS_FINAL", "state": "post", "completed": true}},
+          "competitors": [
+            {"homeAway": "home", "team": {"id": "359", "displayName": "Arsenal", "name": "Arsenal", "shortDisplayName": "ARS"}, "score": "1"},
+            {"homeAway": "away", "team": {"id": "363", "displayName": "Manchester United", "name": "Man United", "shortDisplayName": "MAN"}, "score": "0"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "704948",
+      "date": "2025-08-17T15:30Z",
+      "season": {"year": 2025, "displayName": "2025-26"},
+      "competitions": [
+        {
+          "status": {"type": {"name": "STATUS_FINAL", "state": "post", "completed": true}},
+          "competitors": [
+            {"homeAway": "home", "team": {"id": "382", "displayName": "Chelsea", "name": "Chelsea", "shortDisplayName": "CHE"}, "score": "0"},
+            {"homeAway": "away", "team": {"id": "367", "displayName": "Crystal Palace", "name": "Crystal Palace", "shortDisplayName": "CRY"}, "score": "0"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "704949",
+      "date": "2025-08-23T11:30Z",
+      "season": {"year": 2025, "displayName": "2025-26"},
+      "competitions": [
+        {
+          "status": {"type": {"name": "STATUS_SCHEDULED", "state": "pre", "completed": false}},
+          "competitors": [
+            {"homeAway": "home", "team": {"id": "360", "displayName": "Newcastle United", "name": "Newcastle", "shortDisplayName": "NEW"}, "score": "0"},
+            {"homeAway": "away", "team": {"id": "364", "displayName": "Liverpool", "name": "Liverpool", "shortDisplayName": "LIV"}, "score": "0"}
+          ]
+        }
+      ]
+    }
+  ]
+}
