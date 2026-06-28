@@ -87,9 +87,11 @@ raw_users ──▶ silver/stg_users ──▶ gold/dim_users_by_city ──▶ 
   Python read the resulting **file**, not the warehouse table.
 - **The canonical domain schema lives as dbt models, not raw DDL.** `team`,
   `league`, `match`, and the `*_match_link`/`*_event_link` tables are dbt models
-  under `dbt/data_platform/models/silver/canonical/` — typed **empty** scaffolds
-  (`select cast(null as <type>) as col … limit 0`, `+materialized: table`) until a
-  conform layer populates them. Don't create/alter them with a raw DuckDB
+  under `dbt/data_platform/models/silver/canonical/`. The **ESPN conform layer**
+  (spec 002) populates `league`/`season`/`team`/`match`/`espn_match_link` from the
+  ESPN bronze Parquet; `matchbook_event_link` and `football_data_match_link` remain
+  typed **empty** scaffolds (`select cast(null …) … limit 0`, `+materialized: table`)
+  until their own conform layers land. Don't create/alter them with a raw DuckDB
   connection — that reintroduces the second-writer problem above. (`ERD.md` is the
   Postgres-flavoured source spec; this repo realises it in DuckDB.)
 - **`dbt build` is NOT green from a clean checkout.** `stg_users` (and the gold
@@ -97,10 +99,27 @@ raw_users ──▶ silver/stg_users ──▶ gold/dim_users_by_city ──▶ 
   materialize first; without it dbt fails with `IO Error: No files found …
   users.parquet`. This is environmental (no data yet), not a regression — run the
   ingest before `dbt build`, or expect that one model to error while the rest pass.
-- **dbt model asset keys are prefixed by their model subfolder**, e.g.
-  `AssetKey(["gold", "users_by_city_export"])`, not `["users_by_city_export"]`.
-  Cross-asset `deps=[...]` in Python assets must use the prefixed key or the
-  dependency edge silently won't form (the step then runs out of order).
+- **dbt model Dagster asset keys are prefixed by their *schema* folder only — NOT
+  every subfolder.** A model under `models/silver/canonical/match.sql` gets
+  `AssetKey(["silver", "match"])`, **not** `["silver", "canonical", "match"]`; the
+  `canonical/` (and any deeper) subfolder is dropped. Likewise `gold/…` →
+  `["gold", "<model>"]`. Resolve the real key from the dbt manifest (or
+  `dbt_models.keys`) rather than guessing — a wrong key makes `BronzeAwareTranslator`
+  and cross-asset `deps=[...]` silently not form the edge. **Separately, the dbt
+  *node selector* DOES include the subfolder** — it's `silver.canonical.*` (e.g.
+  `dbt build --select silver.canonical.match`); `silver.match` selects nothing and
+  gives a vacuous green. So: Dagster `AssetKey(["silver","match"])` vs dbt selector
+  `silver.canonical.match` — two different namings, both load-bearing.
+- **Canonical match identity goes through the `canonical_match_id` dbt macro — never
+  a provider event id.** `match_id` is `md5` over the *canonical resolved* natural
+  key (canonical league_id, season_id, UTC kickoff date, seed-resolved home/away
+  `team_id`), computed by `macros/canonical_match_id.sql`. ALWAYS derive `match_id`
+  (and link tables' `match_id`) via that macro over canonical resolved values; NEVER
+  mint identity from a raw provider id (ESPN `event_id`, etc.). This is what lets a
+  future provider (Matchbook/football-data) de-dup onto the same fixture. The
+  resolution is currently inlined in `match.sql`/`team.sql`/`espn_match_link.sql`
+  (guarded by a `relationships` test); extract a shared resolver macro when a second
+  provider's conform layer lands.
 - **The bronze→silver edge is wired by `BronzeAwareTranslator`** in `assets/dbt.py`,
   which maps the dbt source `users` to `AssetKey(["raw_users"])`. Renaming the
   bronze asset or the dbt source breaks the lineage link.
@@ -132,6 +151,16 @@ raw_users ──▶ silver/stg_users ──▶ gold/dim_users_by_city ──▶ 
   Bronze is faithful-to-source: the mandatory core is enforced (Pydantic record +
   open Pandera `strict=False` frame) and the wide optional-odds columns ride along
   (a main E0 file is 7 cols in 1993/94 → 106 in 2023/24).
+- **Faithful bronze of a *nested* source needs a verbatim raw column — an open
+  Pandera frame is not enough.** `strict=False` only proves columns already *in the
+  frame* survive validation; it does NOT protect against a lossy flatten/projection
+  *upstream*. For a flat CSV (football) `pd.read_csv` keeps every column, so the frame
+  is faithful. For nested JSON (ESPN), hand-projecting a core set drops the rest of
+  the payload (e.g. `venue`, `team.shortDisplayName`) — so the ESPN bronze also
+  stores the **complete original event dict verbatim** in a `raw_event` JSON column
+  (`espn/ingest.py`). Faithful-to-source means a future field can be recovered from
+  bronze **without a re-fetch**; prove it with a test that recovers a *non-projected*
+  field, not just that an extra column rides along.
 - **The live registry exposes 11 main + 16 extra leagues** (the spec estimated
   ~19 extra). The registry in `football/registry.py` is the single source of
   truth — discovery holds no hard-coded league URLs.
@@ -218,6 +247,11 @@ run via pre-commit) — don't hand-format; let `ruff format` decide. Lint set is
   prefer context managers for DuckDB connections / spans (`with ... as`).
 - Keep functions side-effect-honest: an asset either produces its artifact or
   raises — no silent fallbacks, defaults-on-failure, or stubbed data.
+- **Run ruff on the files you changed, not the whole tree.** `ruff format src` (or a
+  task that lints `src` wholesale) reformats unrelated, pre-existing files and drags
+  them into your change set. Scope ruff to your own files; the pre-commit hook
+  already runs on staged files only. Note `pre-commit run --all-files` is the full
+  repo gate — keep it green (it surfaces *any* file's lint debt, not just yours).
 
 ## Maintaining this file
 
