@@ -37,8 +37,11 @@ Rather than maintaining separate bespoke tables for every provider entity (e.g.,
 > canonical schema (`team`, `league`, `season`, `match`, `espn_match_link`,
 > `matchbook_event_link`, `football_data_match_link`) is materialized in the
 > **dbt-owned DuckDB warehouse** as typed dbt models under
-> `dbt/data_platform/models/silver/canonical/` (currently empty scaffolds; a later
-> conform layer populates them from the football-data.co.uk bronze Parquet).
+> `dbt/data_platform/models/silver/canonical/`. The **ESPN conform layer** (spec 002)
+> populates `league`, `season`, `team`, `match` and `espn_match_link` from the ESPN
+> bronze Parquet; `matchbook_event_link` and `football_data_match_link` remain empty
+> scaffolds until their own conform layers land (resolving through the same
+> `canonical_match_id` identity).
 
 ---
 
@@ -94,6 +97,9 @@ erDiagram
         string link_id PK
         string match_id FK
         string espn_event_id
+        string match_method
+        double confidence
+        string review_status
     }
     MATCHBOOK_EVENT_LINK {
         string link_id PK
@@ -200,13 +206,27 @@ The central fixture entity linking participants within a season context. Impleme
 To isolate external feed idiosyncrasies from core trading logic, provider entities are linked to canonical matches via external mapping tables. These are now established as distinct canonical tables in `silver` alongside polymorphic cache mappings.
 
 ### `espn_match_link` *(Physical Table Exists: `silver.espn_match_link` / `bronze.espn_match_link`)*
-Maps internal canonical matches to ESPN live state and score feeds.
+Maps internal canonical matches to ESPN live state and score feeds. One row per ESPN
+event; `match_id` is recomputed by the **same** resolution + `canonical_match_id`
+macro as `match`, so it is guaranteed equal to `match.match_id` (a dbt relationships
+test catches any drift). `link_id = md5(espn_event_id)` is a deterministic surrogate,
+so re-runs never duplicate a link.
+
+The `match_method` / `confidence` / `review_status` columns are the **forward-compatible
+linkage seam**: ESPN events resolve through the shared deterministic identity macro,
+so every link is an exact match and these columns carry the truthful values
+`deterministic` / `1.0` / `auto_confirmed`. A future fuzzy/confidence linkage engine
+(a deferred epic) will write sub-`1.0` confidence and `needs_review` rows here; the
+columns exist now so that engine is purely additive.
 
 | Attribute | Type | Nullable | Description |
 | :--- | :--- | :--- | :--- |
-| `link_id` | `VARCHAR` | No (PK) | Primary key for the mapping record. |
-| `match_id` | `VARCHAR` | No (FK) | References canonical `match.match_id`. |
-| `espn_event_id` | `VARCHAR` | No | External event ID provided by the ESPN API. |
+| `link_id` | `VARCHAR` | No (PK) | Primary key for the mapping record (`md5(espn_event_id)`). |
+| `match_id` | `VARCHAR` | No (FK) | References canonical `match.match_id` (recomputed identically to `match`). |
+| `espn_event_id` | `VARCHAR` | No | External event ID provided by the ESPN API (provider reference, **not** a `match_id` input). |
+| `match_method` | `VARCHAR` | No | How the link was established. ESPN: always `'deterministic'`. |
+| `confidence` | `DOUBLE` | No | Linkage confidence. ESPN deterministic match: `1.0`. |
+| `review_status` | `VARCHAR` | No | Review state of the link. ESPN: always `'auto_confirmed'`. |
 
 ### `matchbook_event_link` *(Physical Table Exists: `silver.matchbook_event_link` / `bronze.matchbook_event_link`)*
 Maps internal canonical matches to Matchbook exchange events for trading and odds ingestion.

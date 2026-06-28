@@ -91,14 +91,50 @@ models:
                 field: team_id
 
   - name: espn_match_link
-    description: "Maps a canonical match to an ESPN event."
+    description: >
+      Maps each ESPN event to its canonical match. One row per ESPN event;
+      `match_id` is recomputed by the SAME resolution + canonical_match_id macro as
+      `match`, so it equals `match.match_id` (the relationships test catches drift).
+      The provenance columns are the forward-compatible linkage seam: ESPN resolves
+      deterministically (1.0 / auto_confirmed); a future fuzzy/confidence engine
+      writes lower-confidence / needs-review rows here additively.
     columns:
       - name: link_id
+        description: "PK. Deterministic surrogate md5(espn_event_id) (stable across re-runs)."
         data_tests:
           - not_null
           - unique
       - name: match_id
-        description: "FK -> match.match_id."
+        description: "FK -> match.match_id (recomputed identically to match.sql)."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('match')
+                field: match_id
+      - name: espn_event_id
+        description: "Raw ESPN event id (provider reference; NOT a match_id input). One link per event."
+        data_tests:
+          - not_null
+          - unique
+      - name: match_method
+        description: "How the link was made. ESPN: always 'deterministic'."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["deterministic"]
+      - name: confidence
+        description: "Linkage confidence (DOUBLE). ESPN deterministic match: 1.0."
+        data_tests:
+          - not_null
+      - name: review_status
+        description: "Review state of the link. ESPN: always 'auto_confirmed'."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["auto_confirmed"]
 
   - name: matchbook_event_link
     description: "Maps a canonical match to a Matchbook exchange event."
