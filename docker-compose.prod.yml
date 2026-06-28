@@ -23,6 +23,8 @@ services:
     <<: *prod-app
   jupyter:
     <<: *prod-app
+  matchbook-ingestor:
+    <<: *prod-app
 
 # networks:
 #   otel-external:
