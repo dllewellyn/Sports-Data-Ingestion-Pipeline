@@ -2,58 +2,93 @@ version: 2
 
 models:
   - name: team
-    description: "Canonical team entity (silver). Typed empty scaffold."
+    description: >
+      Canonical team entity (silver), conformed from ESPN + the team_aliases seed.
+      One row per canonical team; seeded aliases resolve to the seed's team_id,
+      unseen ESPN names mint md5(lower(name)). Seed-only (no auto-learn).
     columns:
       - name: team_id
-        description: "Internal canonical team identifier."
+        description: "Internal canonical team identifier (seed team_id, else md5(lower(name)))."
         data_tests:
           - not_null
           - unique
       - name: name
-        description: "Primary display name."
+        description: "Primary display name (seed canonical_name, else the ESPN name)."
+        data_tests:
+          - not_null
       - name: similar_names
-        description: "Alternative names/aliases (list)."
+        description: "Alternative names/aliases (seed aliases, else [name])."
 
   - name: league
-    description: "Canonical competition entity (silver). Typed empty scaffold."
+    description: "Canonical competition entity (silver), conformed from ESPN."
     columns:
       - name: league_id
-        description: "Internal canonical competition identifier."
+        description: "Internal canonical competition identifier (md5(league_slug))."
         data_tests:
           - not_null
           - unique
+      - name: name
+        description: "League display name (ESPN league slug)."
+        data_tests:
+          - not_null
       - name: is_tournament
         description: "True for knockout/group tournaments."
+        data_tests:
+          - not_null
 
   - name: season
     description: >
-      Canonical season/edition of a competition (silver). One row per edition of
-      a league (e.g. the 2025-2026 Premier League). Typed empty scaffold.
+      Canonical season/edition of a competition (silver), conformed from ESPN. One
+      row per edition of a league (e.g. the 2025-26 Premier League).
     columns:
       - name: season_id
-        description: "Internal canonical season identifier."
+        description: "Internal canonical season identifier (md5(league_id || '|' || season_year))."
         data_tests:
           - not_null
           - unique
       - name: league_id
         description: "FK -> league.league_id."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('league')
+                field: league_id
       - name: name
-        description: "Season label (e.g. '2025-2026' / '2026')."
+        description: "Season label (ESPN season_display, e.g. '2025-26')."
 
   - name: match
-    description: "Canonical fixture entity (silver). Typed empty scaffold."
+    description: "Canonical fixture entity (silver), conformed from ESPN."
     columns:
       - name: match_id
-        description: "Internal canonical fixture identifier."
+        description: "Internal canonical fixture identifier (canonical_match_id macro)."
         data_tests:
           - not_null
           - unique
       - name: season_id
         description: "FK -> season.season_id (league reached via season.league_id)."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('season')
+                field: season_id
       - name: home_team_id
         description: "FK -> team.team_id (home)."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('team')
+                field: team_id
       - name: away_team_id
         description: "FK -> team.team_id (away)."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('team')
+                field: team_id
 
   - name: espn_match_link
     description: "Maps a canonical match to an ESPN event."

@@ -1,14 +1,27 @@
--- Canonical domain entity: season/edition of a competition (silver). Typed,
--- empty scaffold — populated by a later conform layer.
+-- Canonical domain entity: season/edition of a competition (silver), conformed
+-- from ESPN. One row per edition of a league (e.g. the 2025-26 Premier League).
+-- A match belongs to a season: match -> season -> league.
 --
--- A season is one edition of a league/competition (e.g. the 2025-2026 Premier
--- League). It is the level a match belongs to: match -> season -> league.
--- Provider season tokens (e.g. football-data.co.uk's '2324') are resolved to a
--- canonical season_id by the conform layer.
+-- Identity: `season_id = md5(league_id || '|' || season_year)` — a deterministic
+-- surrogate of (league, season year). Stable across runs.
+-- NOTE: `match.sql` feeds the macro this canonical `season_id` (the md5 surrogate,
+-- which already encodes league_id + season_year), so a future provider lands on the
+-- same match_id once it agrees on the league mapping + season year and computes the
+-- same season_id. ESPN does not expose a season window in the staged
+-- event payload, so start_date/end_date are NULL (ERD makes them nullable) rather
+-- than fabricated.
+with espn as (
+    select distinct
+        league_slug,
+        season_year,
+        season_display
+    from {{ ref('stg_espn_events') }}
+)
+
 select
-    cast(null as varchar) as season_id,    -- internal canonical season identifier
-    cast(null as varchar) as league_id,    -- FK -> league.league_id
-    cast(null as varchar) as name,         -- season label (e.g. '2025-2026' / '2026')
-    cast(null as date)    as start_date,   -- first day of the season (nullable)
-    cast(null as date)    as end_date      -- last day of the season (nullable)
-limit 0
+    md5(md5(league_slug) || '|' || cast(season_year as varchar)) as season_id,
+    md5(league_slug)                                             as league_id,
+    season_display                                               as name,
+    cast(null as date)                                           as start_date,
+    cast(null as date)                                           as end_date
+from espn
