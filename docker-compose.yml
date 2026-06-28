@@ -37,7 +37,7 @@ services:
       sh -c "cd /app/dbt/data_platform && dbt parse --profiles-dir . &&
              cd /app && dagster-webserver -h 0.0.0.0 -p 3000 -w /app/workspace.yaml"
     ports:
-      - "3000:3000"
+      - "${DAGSTER_UI_PORT:-3000}:3000"
 
   # Dagster daemon: runs schedules, sensors, and the run queue. MUST load the same
   # workspace.yaml as the webserver, or it dequeues runs into an empty workspace and
@@ -55,7 +55,7 @@ services:
       sh -c "jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root
              --ServerApp.root_dir=/app --IdentityProvider.token=$${JUPYTER_TOKEN}"
     ports:
-      - "8888:8888"
+      - "${JUPYTER_PORT:-8888}:8888"
 
 volumes:
   dagster_home:
