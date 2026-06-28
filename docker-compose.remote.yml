@@ -1,0 +1,56 @@
+# Remote deployment overlay. Combine with base via COMPOSE_FILE in .env:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.remote.yml
+#
+# Connects to shared sports-gaming-engine infrastructure (SigNoz/OTEL, Redis)
+# running on the remote host (192.168.1.166) via the 'sports-quant' Docker network.
+
+x-remote-app: &remote-app
+  environment:
+    OTEL_EXPORTER_OTLP_ENDPOINT: http://signoz-otel-collector:4317
+    OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+    REDIS_HOST: redis
+    REDIS_PORT: "6379"
+    DEPLOYMENT_ENVIRONMENT: remote
+  networks:
+    - sports-quant
+  volumes:
+    # Bind mount source directories for live code reloads on the remote machine
+    - ./src:/app/src
+    - ./dbt:/app/dbt
+    - ./notebooks:/app/notebooks
+
+services:
+  dagster-webserver:
+    <<: *remote-app
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://signoz-otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: ingestion-dagster-webserver
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      DEPLOYMENT_ENVIRONMENT: remote
+
+  dagster-daemon:
+    <<: *remote-app
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://signoz-otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: ingestion-dagster-daemon
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      DEPLOYMENT_ENVIRONMENT: remote
+
+  jupyter:
+    <<: *remote-app
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://signoz-otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: ingestion-jupyter
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      DEPLOYMENT_ENVIRONMENT: remote
+
+networks:
+  sports-quant:
+    name: sports-quant
+    external: true
