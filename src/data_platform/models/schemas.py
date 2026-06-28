@@ -156,6 +156,46 @@ class ExtraMatchRecord(BaseModel):
         return v
 
 
+class MatchbookOddsRecord(BaseModel):
+    """One Matchbook odds tick — validated at the Redis pub/sub boundary.
+
+    Required fields (non-nullable in bronze): event_id, market_id, runner_id,
+    ingested_at, in_running. All price/volume/depth fields are nullable.
+    ingested_at is epoch milliseconds (int); Arrow casts to timestamp[ms, UTC].
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    event_id: int
+    market_id: int
+    runner_id: int
+    ingested_at: int
+    in_running: bool
+    sport_id: int | None = None
+    market_type: str | None = None
+    market_status: str | None = None
+    best_back_price: float | None = None
+    best_back_available: float | None = None
+    best_lay_price: float | None = None
+    best_lay_available: float | None = None
+    back_price_2: float | None = None
+    back_available_2: float | None = None
+    back_price_3: float | None = None
+    back_available_3: float | None = None
+    lay_price_2: float | None = None
+    lay_available_2: float | None = None
+    lay_price_3: float | None = None
+    lay_available_3: float | None = None
+    back_depth: float | None = None
+    lay_depth: float | None = None
+    wom: float | None = None
+    market_volume: float | None = None
+    runner_volume: float | None = None
+    handicap_line: float | None = None
+    event_participant_id: int | None = None
+    kickoff_ms: int | None = None
+
+
 __all__ = [
     "User",
     "Address",
@@ -163,4 +203,5 @@ __all__ = [
     "Geo",
     "MainMatchRecord",
     "ExtraMatchRecord",
+    "MatchbookOddsRecord",
 ]
