@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     # Source
     api_base_url: str = "https://jsonplaceholder.typicode.com"
 
+    # Matchbook Redis ingestion
+    matchbook_redis_host: str = "redis"
+    matchbook_redis_port: int = 6379
+
     # football-data.co.uk ingestion (bronze source)
     football_base_url: str = "https://www.football-data.co.uk/"
     football_throttle_seconds: float = 0.4  # polite pacing between outbound requests
@@ -54,6 +58,11 @@ class Settings(BaseSettings):
     @property
     def gold_dir(self) -> Path:
         return self.data_dir / "gold"
+
+    @property
+    def matchbook_bronze_dir(self) -> Path:
+        """Bronze partition root for Matchbook odds ticks (matchbook_odds/...)."""
+        return self.bronze_dir / "matchbook_odds"
 
     @property
     def football_main_dir(self) -> Path:
