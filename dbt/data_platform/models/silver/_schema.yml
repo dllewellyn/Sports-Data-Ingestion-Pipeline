@@ -16,3 +16,13 @@ models:
       - name: city
         data_tests:
           - not_null
+
+  - name: stg_espn_events
+    description: "Typed ESPN events (one row per event) staged from bronze ESPN Parquet."
+    columns:
+      - name: espn_event_id
+        description: "ESPN's native event id (natural key, one row per event)."
+        data_tests:
+          - not_null
+      - name: kickoff_time
+        description: "Kick-off as a UTC timestamp parsed from ESPN's ISO-8601 date."

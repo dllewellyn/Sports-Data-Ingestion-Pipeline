@@ -10,3 +10,8 @@ sources:
         meta:
           # dbt-duckdb reads this Parquet file directly as the source relation.
           external_location: "{{ env_var('DATA_DIR', '/app/data') }}/bronze/users.parquet"
+      - name: espn_events
+        description: "Raw ESPN soccer events, one row per fetched event across all leagues/seasons."
+        meta:
+          # Glob over every bronze ESPN Parquet (one per league/season unit).
+          external_location: "read_parquet('{{ env_var('DATA_DIR', '/app/data') }}/bronze/espn/**/*.parquet', union_by_name=true, filename=true)"

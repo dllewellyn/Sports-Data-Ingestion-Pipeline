@@ -25,14 +25,20 @@ dbt_project.prepare_if_dev()
 
 
 class BronzeAwareTranslator(DagsterDbtTranslator):
-    """Map the dbt source `bronze.users` onto the upstream `raw_users` asset
-    so Dagster draws the bronze -> silver -> gold lineage edge."""
+    """Map dbt bronze sources onto their upstream Dagster ingest assets so
+    Dagster draws the bronze -> silver -> gold lineage edges."""
+
+    # dbt source name -> upstream Dagster bronze asset key.
+    _SOURCE_ASSET_KEYS = {
+        "users": AssetKey(["raw_users"]),
+        "espn_events": AssetKey(["espn_bronze"]),
+    }
 
     def get_asset_key(self, dbt_resource_props: dict) -> AssetKey:
-        if dbt_resource_props["resource_type"] == "source" and (
-            dbt_resource_props["name"] == "users"
-        ):
-            return AssetKey(["raw_users"])
+        if dbt_resource_props["resource_type"] == "source":
+            mapped = self._SOURCE_ASSET_KEYS.get(dbt_resource_props["name"])
+            if mapped is not None:
+                return mapped
         return super().get_asset_key(dbt_resource_props)
 
 
