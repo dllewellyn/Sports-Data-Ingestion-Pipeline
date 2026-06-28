@@ -156,6 +156,48 @@ class ExtraMatchRecord(BaseModel):
         return v
 
 
+# --- ESPN scoreboard bronze record contract (S3) -------------------------------
+# Validates the FLATTENED bronze row (one dict per event), NOT the raw nested
+# scoreboard JSON (the ingest engine does the flattening). The mandatory core is
+# enforced per record; `extra="ignore"` lets the wide ESPN payload (scores, season
+# fields, venue, ...) ride along at the frame level (Pandera) without bloating the
+# record. ESPN ids are numeric — coerced to str so the bronze layer stores strings.
+
+
+class EspnEventRecord(BaseModel):
+    """One flattened ESPN scoreboard event — mandatory core enforced per record.
+
+    Events missing a core field (event id, kickoff date, or a home/away
+    competitor) fail here and are skipped-and-counted by the ingestor (E3).
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    espn_event_id: str
+    kickoff_time: str
+    home_team_id: str
+    home_team_name: str
+    away_team_id: str
+    away_team_name: str
+    status_name: str
+
+    @field_validator(
+        "espn_event_id",
+        "kickoff_time",
+        "home_team_id",
+        "home_team_name",
+        "away_team_id",
+        "away_team_name",
+        "status_name",
+        mode="before",
+    )
+    @classmethod
+    def _required_text(cls, v: object) -> str:
+        if _missing(v):
+            raise ValueError("required core field empty")
+        return str(v).strip()
+
+
 __all__ = [
     "User",
     "Address",
@@ -163,4 +205,5 @@ __all__ = [
     "Geo",
     "MainMatchRecord",
     "ExtraMatchRecord",
+    "EspnEventRecord",
 ]

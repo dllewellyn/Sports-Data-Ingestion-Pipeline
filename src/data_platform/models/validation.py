@@ -64,3 +64,24 @@ extra_bronze_schema = pa.DataFrameSchema(
     strict=False,
     coerce=True,
 )
+
+
+# --- ESPN scoreboard bronze frame contract (S3) --------------------------------
+# Same OPEN (`strict=False`) pattern as the football families: only the mandatory
+# flattened-event core is declared, so the wide ESPN payload (scores, season
+# fields, venue, ...) rides along untouched while a frame MISSING a core column
+# still fails. The per-record core is enforced upstream by Pydantic (schemas.py).
+
+espn_bronze_schema = pa.DataFrameSchema(
+    {
+        "espn_event_id": pa.Column(str, nullable=False),
+        "kickoff_time": pa.Column(str, nullable=False),
+        "home_team_id": pa.Column(str, nullable=False),
+        "home_team_name": pa.Column(str, nullable=False),
+        "away_team_id": pa.Column(str, nullable=False),
+        "away_team_name": pa.Column(str, nullable=False),
+        "status_name": pa.Column(str, nullable=False),
+    },
+    strict=False,
+    coerce=True,
+)
