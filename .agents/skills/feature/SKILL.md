@@ -5,9 +5,9 @@ description: One-shot a feature end-to-end by orchestrating the specification �
 
 # Feature (the end-to-end orchestrator)
 
-Feature is the **conductor** of the phased workflow. It does not write specs, plans, or code itself — it drives the three skills that do (`specification` → `plan` → `implementor`), each as its **own independent sub-agent**, and between phases it (a) verifies the sub-agent actually followed its own skill's internal logic, (b) independently reviews the artifact that phase produced, (c) runs the `self-learn` loop, and (d) only then advances. The result is that a single invocation takes a feature from *user stories / an idea* to *committed, reviewed, learning-captured code* — without the user having to invoke and babysit each phase by hand.
+Feature is the **conductor** of the phased workflow. It does not write specs, plans, or code itself — it drives the three skills that do (`specification` → `plan` → `implementor`), each as its **own independent sub-agent**, and between phases it (a) verifies the sub-agent actually followed its own skill's internal logic, (b) independently reviews the artifact that phase produced, (c) runs the `self-learn` loop, and (d) only then advances. After the build lands it runs one more skill — `improvement-review` — to evaluate the whole changeset for architecture/reuse/repackaging upside (and the coupled skills/docs each opportunity would ripple into) before the final report. The result is that a single invocation takes a feature from *user stories / an idea* to *committed, reviewed, learning-captured, improvement-assessed code* — without the user having to invoke and babysit each phase by hand.
 
-It is the automation of the hand-offs the three skills each *propose* at their end. `specification` ends by proposing planning; `plan` ends by proposing `implementor`; `implementor` ends by proposing `self-learn`. Feature wires those proposals together and adds the connective tissue: an adherence check, an output review, and a disciplined blocker protocol so it can run **autonomously and stop only when genuinely blocked**.
+It is the automation of the hand-offs the skills each *propose* at their end. `specification` ends by proposing planning; `plan` ends by proposing `implementor`; `implementor` ends by proposing `improvement-review` then `self-learn`. Feature wires those proposals together and adds the connective tissue: an adherence check, an output review, and a disciplined blocker protocol so it can run **autonomously and stop only when genuinely blocked**.
 
 A good feature run is:
 - **Faithful to each phase's own logic** — each sub-agent executes its skill's documented workflow in full (not a shortcut), and an independent meta-reviewer confirms it did before the artifact is accepted.
@@ -33,7 +33,7 @@ Phase sub-agents are spawned as `general-purpose` (full tools) — never `fork` 
 
 ## The workflow
 
-Phase 0 is a hard gate. Phases A–C are each one run of the **universal phase protocol** (`references/phase-protocol.md`) — the same six-step loop with phase-specific inputs and checks. Phase D closes out.
+Phase 0 is a hard gate. Phases A–C are each one run of the **universal phase protocol** (`references/phase-protocol.md`) — the same six-step loop with phase-specific inputs and checks. Phase D is the propose-only `improvement-review` evaluation (not the build protocol). Phase E closes out.
 
 ### 0. Intake and readiness (HARD GATE)
 
@@ -66,11 +66,20 @@ Run the phase protocol with `skill: implementor` (input: the plan from Phase B +
 - **Output review:** independent reviewer spot-checks committed tasks for reward-hacking the per-task reviews might have missed (stubs/mocks/hardcoded values/defaults-on-failure outside tests; weakened gates; tests narrowed to pass), and confirms whole-plan traceability (§10) is closed.
 - **Gate:** the **whole-plan green check** passes — `uv run pre-commit run --all-files`, the relevant `dbt build`, `PYTHONPATH=src uv run pytest` if a suite exists; and for any Dagster orchestration wiring change, a run launched through the **daemon/queued path** (not merely `dagster definitions validate`), per CLAUDE.md.
 
-### D. Final verification and report
+### D. Improvement-review phase (evaluate the changeset)
+
+After the build is green and committed, run the `improvement-review` skill as an independent sub-agent over the changeset this run produced. This phase is **propose-only and approval-gated** — it is shaped like the `self-learn` pass, not like the build protocol (no adherence/output-review/gate cycle, since it produces no committed artifact).
+
+- **Delegate:** the sub-agent executes `improvement-review` end-to-end — map what landed, run the three lenses (architecture quality, reuse, repackaging), and for **every** opportunity attach its complete **ripple set** (the coupled skills, `ARCHITECTURE.md`/`ERD.md` diagrams, `CLAUDE.md` constraints, dbt models and docs that must change with it). It is read-only: it edits nothing.
+- **Relay for approval:** present its report (opportunities + evidence + ripple sets + routes) to the user, exactly as you relay `self-learn` proposals. An empty result ("no improvements warranted") is a valid, complete outcome — do not press the sub-agent to manufacture findings.
+- **Do not auto-loop.** Feature does **not** spawn a fresh `plan` → `implementor` cycle from these proposals within the same run — that risks unbounded recursion. Accepted opportunities are recorded as proposed next steps in the final report for the user to kick off as a new Feature run. (The one exception: a finding that the *current* change is broken/contradictory is a blocker — handle it via the blocker protocol, don't defer it.)
+- **No gate.** Because it's advisory, the improvement-review phase never blocks the run from reaching the final report; it only adds proposed follow-up work.
+
+### E. Final verification and report
 
 1. Confirm end-to-end traceability across all three artifacts: every story → spec scenario/AC → plan step → committed task. Report any break.
 2. Confirm each phase's `self-learn` pass ran and its approved learnings landed (or that "nothing durable" was the honest outcome).
-3. Report: the spec/plan paths, tasks completed, commits made (hashes + messages), what's green, every learning codified, and anything deferred to Open questions. Offer the natural next step (e.g. open a PR — Feature does not push) without taking it unbidden.
+3. Report: the spec/plan paths, tasks completed, commits made (hashes + messages), what's green, every learning codified, the `improvement-review` outcome (accepted opportunities + their ripple sets, as proposed next steps), and anything deferred to Open questions. Offer the natural next step (e.g. open a PR — Feature does not push, and Feature does not auto-start the improvement refactors) without taking it unbidden.
 
 ## Guardrails
 
@@ -79,6 +88,7 @@ Run the phase protocol with `skill: implementor` (input: the plan from Phase B +
 - **Autonomous, but a blocker is a full stop.** Run the chain without check-ins, but the moment a sub-agent surfaces an unresolvable ambiguity, a review gap that can't be closed from the inputs, a missing convention, or a destructive/irreversible action — **pause and ask the user** (`references/blocker-protocol.md`). Never guess past a blocker, never weaken a gate or a test to keep moving, never override a reviewer.
 - **Conventions before code (inherited hard gate).** The Plan phase's convention audit must close every gap before the Implementation phase begins. Feature will not start building on an un-established convention.
 - **self-learn after every phase, approval-gated.** Run it each phase; relay its proposals to the user for approval (it may honestly propose nothing). Never let a sub-agent silently edit `CLAUDE.md` or a skill.
+- **improvement-review after the build, propose-only, no auto-loop.** Run it once over the changeset (Phase D); relay its opportunities + ripple sets for approval (empty is valid). It edits nothing, and Feature never auto-spawns a `plan`→`implementor` cycle from its proposals — accepted refactors are reported as next steps, run as a fresh Feature pass by the user. (A finding that the current change is *broken* is a blocker, not a deferred improvement.)
 - **Trace, don't drop, across phases.** A story missing from the spec, a spec AC missing from the plan, or a plan step with no committed task is a hand-off failure — surface it, don't let it slide.
 - **Respect the repo's non-obvious + serial constraints throughout** (CLAUDE.md / ARCHITECTURE.md): single-writer DuckDB and the dbt manifest are shared state; keep `definitions.py`/`AssetSelection` edits serial and verify them via a real queued run; no `from __future__ import annotations` in asset modules; prefixed dbt asset keys; `pathlib.Path`; config via `pydantic-settings`.
 - **No backward-compatibility scaffolding** anywhere in the chain — replace legacy paths, don't make code serve old and new purposes (per the user's design principles).

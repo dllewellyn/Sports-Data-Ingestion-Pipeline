@@ -99,6 +99,7 @@ So end a planning run by proposing that hand-off rather than starting to build h
 - **No reward-hacking — and the reviewer hunts for it.** No placeholders, mocks, hardcoded values, stubs, or defaults-on-failure outside test contexts; never suppress, skip, or add permissive variants to a quality gate or test to make a step pass. The per-step self-review explicitly looks for these.
 - **Trace, don't drop.** Every spec scenario and AC lands in at least one step; every step traces back to the spec. Prove it in the plan's traceability table.
 - **No backward-compatibility scaffolding.** Plan to remove legacy paths, not to make code serve both its old and new purpose (per the user's design principles).
+- **Don't pre-empt reuse-harvesting; build the spec simply.** Plan the most direct implementation of the spec — do not introduce speculative shared abstractions "for reuse." Assessing reuse/repackaging upside (and the artifacts it would ripple into) is the post-build `improvement-review` skill's job, run after `implementor`. Extract now only when a second caller is already real (rule of three).
 - **Surface contradictions & knock-on effects.** If the spec implies work it didn't state, or collides with a repo constraint, say so in the plan rather than silently resolving it.
 - **Respect the repo's non-obvious constraints** (CLAUDE.md / ARCHITECTURE.md) in every step — they caused real bugs.
 

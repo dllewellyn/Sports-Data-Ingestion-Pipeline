@@ -69,7 +69,7 @@ When every task is `done`:
 
 1. Run the **whole-plan green check**, not just per-task: the full guardrail set (`uv run pre-commit run --all-files`; the relevant `dbt build`; `PYTHONPATH=src uv run pytest` if a suite exists). For any change to Dagster orchestration wiring, the green criterion is launching a run through the **daemon/queued path** (a UI/queued launch), not merely `dagster definitions validate` — per the plan's guardrail register and CLAUDE.md (validate loads the location in one process and misses daemon-workspace / `AssetSelection.all()` failures).
 2. Confirm **traceability is closed**: every spec scenario/AC in the plan's §10 is satisfied by a committed task. Report any that aren't.
-3. Report: tasks completed, commits made (hashes + messages), what's green, anything deferred to Open questions, and propose the natural next step (e.g. run `self-learn` to codify learnings; open a PR if the user asks — you do not push).
+3. Report: tasks completed, commits made (hashes + messages), what's green, anything deferred to Open questions, and propose the natural next steps in order: first **`improvement-review`** to evaluate the just-landed changeset for architecture/reuse/repackaging upside (with the coupled skills/docs each opportunity would ripple into), then **`self-learn`** to codify process learnings; open a PR only if the user asks — you do not push. `improvement-review` is propose-only: it never edits the code you just committed; any refactor it surfaces comes back through `plan` → `implementor` as a new change.
 
 ## Guardrails
 
