@@ -115,12 +115,7 @@ def main() -> None:
 
         y, m, d = partition
         dest = (
-            dest_dir
-            / "matchbook_odds"
-            / f"year={y}"
-            / f"month={m:02d}"
-            / f"day={d:02d}"
-            / src.name
+            dest_dir / "matchbook_odds" / f"year={y}" / f"month={m:02d}" / f"day={d:02d}" / src.name
         )
 
         if dest.exists():

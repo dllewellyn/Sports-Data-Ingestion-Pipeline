@@ -142,8 +142,7 @@ def test_flush_bad_schema_writes_nothing(tmp_path: Path) -> None:
 
     # Build a table whose event_id column is string — cast to int64 will raise
     bad_schema = pa.schema(
-        [pa.field("event_id", pa.string())]
-        + [SCHEMA.field(i) for i in range(1, len(SCHEMA))]
+        [pa.field("event_id", pa.string())] + [SCHEMA.field(i) for i in range(1, len(SCHEMA))]
     )
     arrays = []
     for _i, field in enumerate(SCHEMA):
