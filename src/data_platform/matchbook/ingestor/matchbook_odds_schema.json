@@ -1,0 +1,42 @@
+{
+  "name": "matchbook_odds",
+  "description": "Silver-grade Parquet schema for Matchbook odds tick data",
+  "fields": [
+    { "name": "event_id",             "type": "int64",                       "nullable": false },
+    { "name": "market_id",            "type": "int64",                       "nullable": false },
+    { "name": "runner_id",            "type": "int64",                       "nullable": false },
+    { "name": "ingested_at",          "type": "timestamp[ms, UTC]",          "nullable": false },
+    { "name": "sport_id",             "type": "int64",                       "nullable": true  },
+    { "name": "market_type",          "type": "string",                      "nullable": true  },
+    { "name": "market_status",        "type": "string",                      "nullable": true  },
+    { "name": "in_running",           "type": "bool",                        "nullable": false },
+    { "name": "best_back_price",      "type": "float64",                     "nullable": true  },
+    { "name": "best_back_available",  "type": "float64",                     "nullable": true  },
+    { "name": "best_lay_price",       "type": "float64",                     "nullable": true  },
+    { "name": "best_lay_available",   "type": "float64",                     "nullable": true  },
+    { "name": "back_price_2",         "type": "float64",                     "nullable": true  },
+    { "name": "back_available_2",     "type": "float64",                     "nullable": true  },
+    { "name": "back_price_3",         "type": "float64",                     "nullable": true  },
+    { "name": "back_available_3",     "type": "float64",                     "nullable": true  },
+    { "name": "lay_price_2",          "type": "float64",                     "nullable": true  },
+    { "name": "lay_available_2",      "type": "float64",                     "nullable": true  },
+    { "name": "lay_price_3",          "type": "float64",                     "nullable": true  },
+    { "name": "lay_available_3",      "type": "float64",                     "nullable": true  },
+    { "name": "back_depth",           "type": "float64",                     "nullable": true  },
+    { "name": "lay_depth",            "type": "float64",                     "nullable": true  },
+    { "name": "wom",                  "type": "float64",                     "nullable": true  },
+    { "name": "market_volume",        "type": "float64",                     "nullable": true  },
+    { "name": "runner_volume",        "type": "float64",                     "nullable": true  },
+    { "name": "handicap_line",        "type": "float64",                     "nullable": true,  "comment": "null = no handicap" },
+    { "name": "event_participant_id", "type": "int64",                       "nullable": true  },
+    { "name": "kickoff_ms",           "type": "int64",                       "nullable": true,  "comment": "Unix epoch ms from exchange start field; null = unknown" }
+  ],
+  "dedup_fields": [
+    "best_back_price", "best_lay_price",
+    "best_back_available", "best_lay_available",
+    "back_available_2", "back_available_3",
+    "lay_available_2", "lay_available_3",
+    "market_volume", "runner_volume",
+    "in_running", "market_status"
+  ]
+}

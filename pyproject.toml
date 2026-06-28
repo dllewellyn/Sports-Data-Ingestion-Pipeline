@@ -14,6 +14,7 @@ dependencies = [
     # Storage / engine
     "duckdb>=1.1",
     "pyarrow>=18.0",
+    "redis>=5.0",
     # Dataframes + HTTP
     "pandas>=2.2",
     "requests>=2.32",
