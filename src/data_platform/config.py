@@ -24,6 +24,16 @@ class Settings(BaseSettings):
     football_max_retries: int = 3  # bounded retry for transient errors (then surface)
     football_user_agent: str = "data-platform/0.1 (+football-data ingestion)"
 
+    # ESPN soccer ingestion (bronze source)
+    espn_core_base_url: str = "https://sports.core.api.espn.com"
+    espn_site_base_url: str = "https://site.api.espn.com"
+    espn_fetch_horizon_days: int = 30  # today ± horizon → which season windows to fetch
+    espn_throttle_seconds: float = 0.1  # polite pacing between outbound requests
+    espn_request_timeout: float = 30.0
+    espn_max_retries: int = 3  # bounded retry for transient errors (then surface)
+    # ESPN requires a browser User-Agent or it rejects/throttles requests.
+    espn_user_agent: str = "Mozilla/5.0 (compatible; data-platform/0.1; +espn ingestion)"
+
     # Medallion layout
     data_dir: Path = Path("data")
     duckdb_path: Path = Path("data/warehouse.duckdb")
@@ -54,6 +64,11 @@ class Settings(BaseSettings):
     def football_extra_dir(self) -> Path:
         """Bronze partition root for the extra family (football_extra/<code>.parquet)."""
         return self.bronze_dir / "football_extra"
+
+    @property
+    def espn_bronze_dir(self) -> Path:
+        """Bronze partition root for ESPN soccer ingestion (espn/...)."""
+        return self.bronze_dir / "espn"
 
 
 settings = Settings()
