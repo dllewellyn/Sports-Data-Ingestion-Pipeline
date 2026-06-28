@@ -22,8 +22,6 @@ x-remote-app: &remote-app
 services:
   dagster-webserver:
     <<: *remote-app
-    ports: !reset
-      - "${DAGSTER_UI_PORT:-3002}:3000"
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://signoz-otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
