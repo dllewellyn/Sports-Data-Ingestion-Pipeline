@@ -180,6 +180,10 @@ class EspnEventRecord(BaseModel):
     away_team_id: str
     away_team_name: str
     status_name: str
+    # The complete original event JSON, preserved verbatim (faithful bronze): every
+    # field ESPN sent is recoverable from this string without re-fetching. Required
+    # and non-empty so a row can never silently drop the source payload.
+    raw_event: str
 
     @field_validator(
         "espn_event_id",
@@ -189,6 +193,7 @@ class EspnEventRecord(BaseModel):
         "away_team_id",
         "away_team_name",
         "status_name",
+        "raw_event",
         mode="before",
     )
     @classmethod

@@ -18,6 +18,7 @@ metadata/run-status surfacing.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
@@ -101,6 +102,11 @@ def flatten_events(scoreboard_json: dict) -> list[dict]:
     Events with no competition or a missing home/away competitor are dropped here
     (they cannot form a row); a row missing a CORE *field* is left for Pydantic to
     reject downstream. Scores ride along as strings, null when not present.
+
+    The complete original event dict is preserved verbatim in ``raw_event`` (the
+    whole ESPN event JSON, serialized deterministically) so bronze stays faithful
+    to source: every field ESPN sent — venue, broadcasts, odds, leaders, stats,
+    ``team.shortDisplayName``, ... — is recoverable later WITHOUT re-fetching.
     """
     rows: list[dict] = []
     for event in scoreboard_json.get("events", []):
@@ -136,6 +142,9 @@ def flatten_events(scoreboard_json: dict) -> list[dict]:
                 "away_score": _score_of(away),
                 "status_state": status.get("state"),
                 "status_completed": status.get("completed"),
+                # faithful bronze: the COMPLETE original event verbatim (no field
+                # lost; recoverable by parsing this JSON without re-fetching)
+                "raw_event": json.dumps(event, separators=(",", ":"), sort_keys=True),
             }
         )
     return rows

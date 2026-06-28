@@ -98,6 +98,38 @@ def test_flatten_drops_events_missing_competition_or_competitor() -> None:
     assert flatten_events(payload) == []
 
 
+# --- faithful bronze (spec clause b / AC1 / AC2) -------------------------------
+
+
+def test_raw_event_preserves_full_payload_verbatim(tmp_path, monkeypatch) -> None:
+    """A field OUTSIDE the projected core is recoverable from bronze without re-fetch.
+
+    ``team.shortDisplayName`` ("LIV"/"BOU") is not one of the hand-projected columns,
+    so before the faithful-bronze fix it was DROPPED at flatten time. It must be
+    recoverable by parsing the ``raw_event`` JSON of the persisted bronze row.
+    """
+    from data_platform.config import settings
+
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    unit = _unit()
+    fetcher = FakeFetcher({unit.scoreboard_url: _load("scoreboard_eng1_2025_prematch.json")})
+
+    ingest_units([unit], fetcher, log=None, schema=espn_bronze_schema)
+
+    landed = pd.read_parquet(tmp_path / "bronze" / "espn" / "eng.1" / "2025.parquet")
+    assert "raw_event" in landed.columns
+    row = landed.loc[landed["espn_event_id"] == "704946"].iloc[0]
+
+    event = json.loads(row["raw_event"])
+    competitors = event["competitions"][0]["competitors"]
+    home = next(c for c in competitors if c["homeAway"] == "home")
+    away = next(c for c in competitors if c["homeAway"] == "away")
+    # shortDisplayName is NOT a projected bronze column — only recoverable from raw_event.
+    assert "short_display_name" not in landed.columns
+    assert home["team"]["shortDisplayName"] == "LIV"
+    assert away["team"]["shortDisplayName"] == "BOU"
+
+
 # --- ingest --------------------------------------------------------------------
 
 

@@ -81,6 +81,9 @@ espn_bronze_schema = pa.DataFrameSchema(
         "away_team_id": pa.Column(str, nullable=False),
         "away_team_name": pa.Column(str, nullable=False),
         "status_name": pa.Column(str, nullable=False),
+        # faithful bronze: the complete original event JSON rides along as a
+        # required core column so the full payload is always persisted verbatim.
+        "raw_event": pa.Column(str, nullable=False),
     },
     strict=False,
     coerce=True,

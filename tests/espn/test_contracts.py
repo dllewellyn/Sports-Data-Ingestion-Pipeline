@@ -24,6 +24,7 @@ VALID_ROW = {
     "away_team_id": "360",
     "away_team_name": "Wolverhampton Wanderers",
     "status_name": "STATUS_SCHEDULED",
+    "raw_event": '{"id":"401547438"}',
 }
 
 
@@ -100,6 +101,7 @@ def test_wide_frame_extra_columns_ride_along() -> None:
                 "away_score": 0,
                 "season_year": 2024,
                 "venue": "Anfield",
+                "raw_event": '{"id":"401547439"}',
             },
         ]
     )
