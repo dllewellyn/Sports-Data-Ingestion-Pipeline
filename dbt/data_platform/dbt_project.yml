@@ -24,3 +24,16 @@ models:
     gold:
       +materialized: table
       +schema: gold
+
+seeds:
+  data_platform:
+    +schema: silver
+    team_aliases:
+      # Curated canonical-team + alias seed: one row per (team, alias). The
+      # conform `team` model joins incoming names to `alias` to resolve a stable
+      # `team_id`, and array_aggs `alias` into `team.similar_names`. Seed-only
+      # (no auto-learn). `team_id` is the md5 of lower(canonical_name).
+      +column_types:
+        team_id: varchar
+        canonical_name: varchar
+        alias: varchar
