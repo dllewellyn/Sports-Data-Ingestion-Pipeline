@@ -85,15 +85,11 @@ Bridge the spec's behaviour to concrete, test-first units.
 
 Create `specs/NNN-<slug>-plan.md` using `references/plan-template.md` **exactly** — same frontmatter keys and section order, same per-step shape. Share the spec's `NNN`. Fill every section; carry the skill-usage map (Phase 1), the convention-audit table (Phase 2), the unit→test→trace map (Phase 3), the guardrail register (Phase 4), and the sequenced steps (Phase 5). Put anything unresolved under *Open questions* (blockers flagged) and any taken-as-true item under *Assumptions* — never bury an assumption.
 
-### 7. Drive execution with per-step self-review (when the user proceeds to build)
+### 7. Hand off to execution
 
-When the user says go, execute the plan step by step. For each step:
+When the user says go, **execution is the `implementor` skill's job, not this one.** Plan produces the plan; `implementor` drives it — decomposing the steps into a task graph, delegating each to an implementer sub-agent, running the per-step red→green→independent-review→commit loop (using the reviewer protocol this skill defines in `references/self-review.md` and the §6 self-review checkpoints), parallelising file-disjoint steps where safe, and looping until the plan is complete.
 
-1. **Red** — write the failing test from the step; run it; confirm it fails for the right reason.
-2. **Green** — implement the minimum to pass; run the test (and the relevant guardrails — `ruff`, `dbt build`).
-3. **Self-review (independent sub-agent).** Spawn a fresh `general-purpose` agent (or invoke the `code-review` skill) with the reviewer prompt from `references/self-review.md`. It is read-only and adversarial: it confirms the step *actually* meets its spec scenario/AC, the test genuinely exercises the behaviour (not a test that can't fail), conventions are honoured, and there's **no reward-hacking** (no stubs/mocks/hardcoded values/defaults-on-failure outside test contexts; no suppressed gates). It returns a verdict: pass / gaps (with evidence) / reward-hacking detected.
-4. **Gate.** Do not start the next step until the current one passes review. Fix and re-review on a fail — never weaken the test or the gate to make it pass.
-5. At each logical conclusion, make an atomic Conventional Commit (per the user's git rules). Do not `git push`.
+So end a planning run by proposing that hand-off rather than starting to build here. The per-step contract (§6) and the self-review reference are written precisely so `implementor` can execute against them.
 
 ## Guardrails
 
