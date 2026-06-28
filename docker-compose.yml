@@ -57,5 +57,22 @@ services:
     ports:
       - "${JUPYTER_PORT:-8888}:8888"
 
+  # Matchbook odds tick ingestor — reads matchbook_odds_stream from Redis
+  # (provided by the external sports-gaming-engine stack) and writes ZSTD
+  # Parquet to data/bronze/matchbook_odds/. Redis is NOT started here.
+  matchbook-ingestor:
+    <<: *app
+    command: python -m data_platform.matchbook.ingestor.direct_parquet_consumer
+    environment:
+      MATCHBOOK_REDIS_HOST: ${MATCHBOOK_REDIS_HOST:-redis}
+      MATCHBOOK_REDIS_PORT: ${MATCHBOOK_REDIS_PORT:-6379}
+    networks:
+      - sports-quant
+    restart: unless-stopped
+
 volumes:
   dagster_home:
+
+networks:
+  sports-quant:
+    external: true

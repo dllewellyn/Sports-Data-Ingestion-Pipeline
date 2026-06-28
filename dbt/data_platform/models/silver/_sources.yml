@@ -10,3 +10,41 @@ sources:
         meta:
           # dbt-duckdb reads this Parquet file directly as the source relation.
           external_location: "{{ env_var('DATA_DIR', '/app/data') }}/bronze/users.parquet"
+
+      - name: matchbook_odds
+        description: "Matchbook odds tick data (bronze Parquet, Hive-partitioned by date). Written by the matchbook-ingestor Docker service."
+        meta:
+          external_location: "read_parquet('{{ env_var(\"DATA_DIR\", \"/app/data\") }}/bronze/matchbook_odds/**/*.parquet', union_by_name=true)"
+        columns:
+          - name: event_id
+            description: "Matchbook exchange event ID"
+          - name: market_id
+            description: "Matchbook market ID"
+          - name: runner_id
+            description: "Matchbook runner/selection ID"
+          - name: ingested_at
+            description: "Tick capture time (epoch ms, cast to timestamp[ms, UTC] by Arrow)"
+          - name: sport_id
+          - name: market_type
+          - name: market_status
+          - name: in_running
+          - name: best_back_price
+          - name: best_back_available
+          - name: best_lay_price
+          - name: best_lay_available
+          - name: back_price_2
+          - name: back_available_2
+          - name: back_price_3
+          - name: back_available_3
+          - name: lay_price_2
+          - name: lay_available_2
+          - name: lay_price_3
+          - name: lay_available_3
+          - name: back_depth
+          - name: lay_depth
+          - name: wom
+          - name: market_volume
+          - name: runner_volume
+          - name: handicap_line
+          - name: event_participant_id
+          - name: kickoff_ms
