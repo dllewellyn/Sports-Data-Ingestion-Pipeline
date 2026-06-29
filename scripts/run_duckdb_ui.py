@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import socket
 import threading
@@ -12,13 +13,13 @@ logger = logging.getLogger("duckdb_ui")
 
 def proxy_stream(src: socket.socket, dst: socket.socket) -> None:
     try:
-        while buf := src.recv(8192):
+        while buf := src.recv(65536):
             dst.sendall(buf)
     except Exception:
         pass
     finally:
-        src.close()
-        dst.close()
+        with contextlib.suppress(Exception):
+            dst.shutdown(socket.SHUT_WR)
 
 
 def main() -> None:
@@ -61,12 +62,19 @@ def main() -> None:
             client_sock.close()
             continue
 
-        threading.Thread(
-            target=proxy_stream, args=(client_sock, dest_sock), daemon=True
-        ).start()
-        threading.Thread(
-            target=proxy_stream, args=(dest_sock, client_sock), daemon=True
-        ).start()
+        def handle_client(c: socket.socket, d: socket.socket) -> None:
+            t1 = threading.Thread(target=proxy_stream, args=(c, d))
+            t2 = threading.Thread(target=proxy_stream, args=(d, c))
+            t1.start()
+            t2.start()
+            t1.join()
+            t2.join()
+            with contextlib.suppress(Exception):
+                c.close()
+            with contextlib.suppress(Exception):
+                d.close()
+
+        threading.Thread(target=handle_client, args=(client_sock, dest_sock), daemon=True).start()
 
 
 if __name__ == "__main__":
