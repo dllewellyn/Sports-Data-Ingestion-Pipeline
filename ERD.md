@@ -22,11 +22,11 @@ Rather than maintaining separate bespoke tables for every provider entity (e.g.,
 | :--- | :--- | :--- | :--- |
 | `team` (`silver.team`) | Postgres | **Physical Table Exists** | Distinct canonical table in `silver.team` (accessible via `bronze.team` view). Also cached in `bronze.provider_entity_cache`. |
 | `league` (`silver.league`) | Postgres | **Physical Table Exists** | Distinct canonical table in `silver.league` (accessible via `bronze.league` view). Also cached in `bronze.provider_entity_cache`. |
-| `season` (`silver.season`) | DuckDB | **Physical Table Exists** | One edition of a competition (`season.league_id` → `league.league_id`). Materialized in this repo's dbt-owned DuckDB warehouse (`models/silver/canonical/season.sql`). |
+| `season` (`silver.season`) | DuckLake | **Physical Table Exists** | One edition of a competition (`season.league_id` → `league.league_id`). Materialized in this repo's dbt-owned DuckLake catalog (`models/silver/canonical/season.sql`). |
 | `match` (`silver.match`) | Postgres | **Physical Table Exists** | Distinct canonical table in `silver.match` (accessible via `bronze.match` view). Belongs to a `season` (`match.season_id`); the league is reached via `season.league_id`. |
 | `espn_match_link` (`silver.espn_match_link`) | Postgres | **Physical Table Exists** | Distinct canonical linking table in `silver.espn_match_link` (accessible via `bronze.espn_match_link` view). |
 | `matchbook_event_link` (`silver.matchbook_event_link`) | Postgres | **Physical Table Exists** | Distinct canonical linking table in `silver.matchbook_event_link` (accessible via `bronze.matchbook_event_link` view). |
-| `football_data_match_link` (`silver.football_data_match_link`) | DuckDB | **Physical Table Exists** | Linking table mapping canonical matches to football-data.co.uk source rows via a **composite natural key** (the source exposes no stable match id). Materialized in this repo's dbt-owned DuckDB warehouse (`models/silver/canonical/`). |
+| `football_data_match_link` (`silver.football_data_match_link`) | DuckLake | **Physical Table Exists** | Linking table mapping canonical matches to football-data.co.uk source rows via a **composite natural key** (the source exposes no stable match id). Materialized in this repo's dbt-owned DuckLake catalog (`models/silver/canonical/`). |
 | `bronze.provider_match_cache` | Postgres | **Physical Table Exists** | Active ingestion table storing fixture snapshots per provider (`provider_id = event_id`). |
 | `bronze.matchbook_market_catalogue`| Postgres | **Physical Table Exists** | Active ingestion table storing Matchbook market definitions and trading status. |
 | `bronze.matchbook_runner_catalogue`| Postgres | **Physical Table Exists** | Active ingestion table storing runner/selection metadata and sorting priority. |
@@ -36,7 +36,8 @@ Rather than maintaining separate bespoke tables for every provider entity (e.g.,
 > model as ported from the upstream gaming-engine project. In *this* repository the
 > canonical schema (`team`, `league`, `season`, `match`, `espn_match_link`,
 > `matchbook_event_link`, `football_data_match_link`) is materialized in the
-> **dbt-owned DuckDB warehouse** as typed dbt models under
+> **dbt-owned DuckLake catalog** (PostgreSQL-backed, accessed via `ducklake:` URI in
+> `profiles.yml`) as typed dbt models under
 > `dbt/data_platform/models/silver/canonical/`. The **ESPN conform layer** (spec 002)
 > populates `league`, `season`, `team`, `match` and `espn_match_link` from the ESPN
 > bronze Parquet; `matchbook_event_link` and `football_data_match_link` remain empty
@@ -174,7 +175,7 @@ Represents a structured sports competition, covering both standard seasonal leag
 | `name` | `VARCHAR` | No | Display name of the competition (e.g., `"Premier League"`, `"World Cup"`). |
 | `is_tournament` | `BOOLEAN` | No | `true` if the competition is a knockout/group tournament rather than a regular league table. |
 
-### `season` *(Physical DuckDB Table Exists: `silver.season`)*
+### `season` *(Physical DuckLake Table Exists: `silver.season`)*
 Represents a single **edition** of a competition (e.g. the 2025-2026 Premier League, or the 2026 World Cup). One `league` has many `season`s; a `match` belongs to a `season`, and the owning league is reached transitively via `season.league_id`. Provider season tokens (e.g. football-data.co.uk's `"2324"`) are resolved to a canonical `season_id` by the conform layer.
 
 | Attribute | Type | Nullable | Description |
@@ -237,7 +238,7 @@ Maps internal canonical matches to Matchbook exchange events for trading and odd
 | `match_id` | `VARCHAR` | No (FK) | References canonical `match.match_id`. |
 | `matchbook_event_id` | `VARCHAR` | No | External event ID provided by the Matchbook API (`event_id`). |
 
-### `football_data_match_link` *(Physical DuckDB Table Exists: `silver.football_data_match_link`)*
+### `football_data_match_link` *(Physical DuckLake Table Exists: `silver.football_data_match_link`)*
 Maps internal canonical matches to source rows from **football-data.co.uk** (the
 historical results/odds CSV feed ingested by this repo's bronze layer).
 

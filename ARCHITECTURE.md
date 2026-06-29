@@ -62,7 +62,7 @@ models appear as Dagster assets.
 │
 ├── dbt/data_platform/          # The dbt project (all SQL transformation + warehouse tests)
 │   ├── dbt_project.yml         #   silver = view, gold = table (+ external Parquet export)
-│   ├── profiles.yml            #   DuckDB target; reads DUCKDB_PATH/DATA_DIR via env_var
+│   ├── profiles.yml            #   DuckLake target; reads POSTGRES_CATALOG_URL/DATA_DIR via env_var
 │   ├── models/
 │   │   ├── silver/             #   staging views over the bronze Parquet source
 │   │   └── gold/               #   aggregates + the external (Parquet) export model
@@ -90,8 +90,8 @@ downstream; a layer never imports or reads from a layer above it.**
 | Layer | Owned by | Reads | Writes | Validation gate |
 | --- | --- | --- | --- | --- |
 | **Bronze** | `assets/bronze.py`, `assets/football_*.py` (+ `football/` helpers) | Source API / website (HTTP) | `data/bronze/**/*.parquet` | Pydantic (record) → Pandera (frame) |
-| **Silver** | `dbt/.../models/silver` | bronze Parquet (external source) | DuckDB view | dbt tests |
-| **Gold** | `dbt/.../models/gold` | silver | DuckDB table + `data/gold/*.parquet` | dbt tests |
+| **Silver** | `dbt/.../models/silver` | bronze Parquet (external source) | DuckLake view (via dbt) | dbt tests |
+| **Gold** | `dbt/.../models/gold` | silver | DuckLake table + `data/gold/*.parquet` (via dbt) | dbt tests |
 | **Publish** | `assets/gold.py` | gold Parquet **file** | run metadata + OTel span | — |
 
 Hard rules that define the architecture:
@@ -109,9 +109,9 @@ Hard rules that define the architecture:
    frame is then checked by a Pandera schema (`models/validation.py`) before it
    is written to Parquet. Warehouse-level invariants are asserted by dbt tests.
    Three complementary gates, in that order.
-3. **dbt owns the warehouse; Python reads files, not tables.** Cross-process
+3. **dbt owns the DuckLake catalog; Python reads Parquet files, not catalog tables.** Cross-process
    readers (the publish asset, notebooks) read the **Parquet artifacts** dbt
-   produces, never `warehouse.duckdb` directly. (This is a structural expression
+   produces, never catalog tables directly. (This is a structural expression
    of the single-writer constraint documented in `CLAUDE.md`.)
 4. **`definitions.py` is the only composition root.** It is the single place
    that knows about all assets, jobs, schedules, and resources at once. Asset

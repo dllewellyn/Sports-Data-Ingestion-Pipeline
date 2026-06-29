@@ -57,7 +57,7 @@ by **pytest** under `tests/` (see the `pytest` command above).
 > documented in [`ERD.md`](ERD.md) — it is living documentation: when you add or
 > change a canonical/link table (or a dbt model under `models/silver/canonical/`),
 > update `ERD.md` in the same commit. Note `ERD.md` was ported from the upstream
-> Postgres gaming-engine; this repo materializes that model in DuckDB (see the
+> Postgres gaming-engine; this repo materializes that model in DuckLake (see the
 > storage-engine note in `ERD.md` and the constraint below).
 
 Medallion pipeline orchestrated by Dagster, transformed/tested by dbt on DuckDB,
@@ -79,14 +79,9 @@ raw_users ──▶ silver/stg_users ──▶ gold/dim_users_by_city ──▶ 
 
 ### Non-obvious constraints (these caused real bugs — preserve them)
 
-- **DuckDB is single-writer; dbt owns the warehouse file.** Do NOT add a second
-  process/Dagster step that opens `warehouse.duckdb` read-write during a run — a
-  separate process cannot see dbt's un-checkpointed WAL writes and gets phantom
-  "schema does not exist" catalog errors. Produce derived Parquet *inside dbt*
-  (the `external` materialization in `gold/users_by_city_export.sql`) and have
-  Python read the resulting **file**, not the warehouse table.
-- **DuckDB UI must open `warehouse.duckdb` READ_ONLY.** The `duckdb-ui` container attaches `warehouse.duckdb` with `(READ_ONLY)` to preserve the single-writer invariant. Any future service or notebook that browses the warehouse must do the same. The DuckLake catalog Postgres service is independent and does not touch the `.duckdb` file.
-- **DuckLake adoption is incremental: catalog in Spec 002, model migration in Spec 003.** The `ducklake-catalog` Postgres service and the `ducklake` dbt extension are wired in Spec 002, but no existing silver/gold models are migrated. The catalog is available as the `lake` attachment in dbt sessions. Do not move models to DuckLake until Spec 003.
+- **DuckDB single-writer constraint applies to `warehouse.duckdb` only (applies to warehouse.duckdb only; DuckLake-managed tables support concurrent access).** Do NOT open `warehouse.duckdb` read-write from a second process/Dagster step — a separate process cannot see dbt's un-checkpointed WAL writes and gets phantom "schema does not exist" catalog errors. After Spec 003, `profiles.yml` `path:` points at the DuckLake catalog; `DUCKDB_PATH` is kept only for the DuckDB UI service. Silver and gold dbt models now write to DuckLake (the PostgreSQL-backed catalog), which supports concurrent readers. The gold external Parquet export (`users_by_city_export.sql`) still writes a file — have Python read the resulting **file**, not any catalog table.
+- **DuckDB UI must open `warehouse.duckdb` READ_ONLY.** The `duckdb-ui` container attaches `warehouse.duckdb` with `(READ_ONLY)` to preserve the single-writer invariant for that file. Any future service or notebook that browses it must do the same. The DuckLake catalog Postgres service is independent and does not touch the `.duckdb` file.
+- **`DATA_PATH` in the DuckLake `attach` stanza must match across all consumers.** The `profiles.yml` `attach:` entry and the `duckdb-ui` container's entrypoint both specify a `DATA_PATH`. A mismatch silently creates two separate lake data directories — DuckLake writes tables into one, the UI browses an empty catalog in the other. The canonical value is `/app/data/lake/` (container path); `./data/lake/` on the host.
 - **DuckDB runtime >=1.5.2 required for the DuckLake 1.0 extension.** The Python package in `pyproject.toml` is pinned `>=1.5.2`; the `duckdb/duckdb:latest` Docker image must also satisfy this. If pinning to an older tag, verify it ships DuckDB >=1.5.2.
 - **The canonical domain schema lives as dbt models, not raw DDL.** `team`,
   `league`, `match`, and the `*_match_link`/`*_event_link` tables are dbt models
@@ -96,7 +91,7 @@ raw_users ──▶ silver/stg_users ──▶ gold/dim_users_by_city ──▶ 
   typed **empty** scaffolds (`select cast(null …) … limit 0`, `+materialized: table`)
   until their own conform layers land. Don't create/alter them with a raw DuckDB
   connection — that reintroduces the second-writer problem above. (`ERD.md` is the
-  Postgres-flavoured source spec; this repo realises it in DuckDB.)
+  Postgres-flavoured source spec; this repo realises it in DuckLake.)
 - **`dbt build` is NOT green from a clean checkout.** `stg_users` (and the gold
   models) read `data/bronze/users.parquet`, which the Dagster `bronze` asset must
   materialize first; without it dbt fails with `IO Error: No files found …
@@ -198,9 +193,10 @@ raw_users ──▶ silver/stg_users ──▶ gold/dim_users_by_city ──▶ 
 ### Configuration & telemetry
 
 - All runtime config flows through `config.py` (`pydantic-settings`, env-driven):
-  `DATA_DIR`, `DUCKDB_PATH`, `API_BASE_URL`, `OTEL_EXPORTER_OTLP_ENDPOINT`.
-  The dbt `profiles.yml` and the gold `external` model read `DUCKDB_PATH`/`DATA_DIR`
-  via `env_var(...)`, so all components must agree on these.
+  `DATA_DIR`, `DUCKDB_PATH`, `POSTGRES_CATALOG_URL`, `API_BASE_URL`, `OTEL_EXPORTER_OTLP_ENDPOINT`.
+  The dbt `profiles.yml` reads `POSTGRES_CATALOG_URL` (DuckLake catalog URI) and the gold
+  `external` model reads `DATA_DIR` via `env_var(...)`. `DUCKDB_PATH` is retained for the
+  DuckDB UI service but is no longer used by dbt after Spec 003.
 - `otel.py` installs the tracer provider once and auto-instruments `requests`.
   Without a collector reachable at `OTEL_EXPORTER_OTLP_ENDPOINT` you get harmless
   `Connection refused` retries; spans are dropped (so app startup never depends on

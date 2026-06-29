@@ -18,6 +18,7 @@ x-app: &app
     DAGSTER_HOME: /app/.dagster
     DATA_DIR: /app/data
     DUCKDB_PATH: /app/data/warehouse.duckdb
+    POSTGRES_CATALOG_URL: "postgresql://ducklake:ducklake@ducklake-catalog:5432/ducklake"
     PYTHONPATH: /app/src
     # OTEL_EXPORTER_OTLP_ENDPOINT is set by the overlay (dev -> SigNoz collector,
     # prod -> external collector), so the base stays environment-neutral.
@@ -33,6 +34,9 @@ services:
   # Loads the SAME workspace.yaml as the daemon so queued runs can be launched.
   dagster-webserver:
     <<: *app
+    depends_on:
+      ducklake-catalog:
+        condition: service_healthy
     command: >
       sh -c "cd /app/dbt/data_platform && dbt parse --profiles-dir . &&
              cd /app && dagster-webserver -h 0.0.0.0 -p 3000 -w /app/workspace.yaml"
@@ -44,6 +48,9 @@ services:
   # fails with "Location data_platform.definitions does not exist in workspace".
   dagster-daemon:
     <<: *app
+    depends_on:
+      ducklake-catalog:
+        condition: service_healthy
     command: >
       sh -c "cd /app/dbt/data_platform && dbt parse --profiles-dir . &&
              cd /app && dagster-daemon run -w /app/workspace.yaml"
