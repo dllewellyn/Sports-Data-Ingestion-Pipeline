@@ -18,6 +18,7 @@ x-remote-app: &remote-app
     - ./src:/app/src
     - ./dbt:/app/dbt
     - ./notebooks:/app/notebooks
+    - ./scripts:/app/scripts
 
 services:
   dagster-webserver:
@@ -51,8 +52,14 @@ services:
       DEPLOYMENT_ENVIRONMENT: remote
 
   duckdb-ui:
-    networks:
-      - sports-quant
+    <<: *remote-app
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://signoz-otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: ingestion-duckdb-ui
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      DEPLOYMENT_ENVIRONMENT: remote
 
   ducklake-catalog:
     networks:

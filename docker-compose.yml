@@ -98,25 +98,19 @@ services:
   # Opens warehouse.duckdb READ_ONLY (single-writer constraint preserved).
   # Also attaches the DuckLake catalog for browsing catalog-managed tables.
   duckdb-ui:
-    image: duckdb/duckdb:latest
+    <<: *app
     ports:
-      - "4213:4213"
-    volumes:
-      - ./data:/app/data:ro
+      - "4213:4214"
     depends_on:
       ducklake-catalog:
         condition: service_healthy
-    entrypoint:
-      - duckdb
-      - -cmd
-      - "INSTALL ui; LOAD ui; INSTALL postgres; LOAD postgres; INSTALL ducklake; LOAD ducklake; ATTACH '/app/data/warehouse.duckdb' AS warehouse (READ_ONLY); ATTACH 'ducklake:postgres:dbname=ducklake user=ducklake password=ducklake host=ducklake-catalog port=5432' AS lake (DATA_PATH '/app/data/lake/'); CALL start_ui();"
+    command: python scripts/run_duckdb_ui.py
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://localhost:4213 || exit 1"]
+      test: ["CMD-SHELL", "python3 -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:4214\")' || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 10s
-    restart: unless-stopped
+      start_period: 15s
 
 volumes:
   dagster_home:

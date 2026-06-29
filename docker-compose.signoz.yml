@@ -69,6 +69,7 @@ x-dev-app: &dev-app
     - ./src:/app/src
     - ./dbt:/app/dbt
     - ./notebooks:/app/notebooks
+    - ./scripts:/app/scripts
 
 services:
   # --- App services: dev overrides (merged onto docker-compose.yml) ---
@@ -80,8 +81,7 @@ services:
     <<: *dev-app
 
   duckdb-ui:
-    networks:
-      - signoz-net
+    <<: *dev-app
 
   ducklake-catalog:
     networks:
