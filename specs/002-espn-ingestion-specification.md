@@ -7,6 +7,7 @@ created: 2026-06-28
 user_stories: [espn-data-flow]
 investigation: espn-api-discovery
 related_specs: [001]
+source_commits: [5cebb5e, fc6e37c]   # canonical domain MODEL definition, folded in retrospectively (the schema this ESPN conform layer populates). ESPN's own forward work is traced to clauses a–d in §11, not commits.
 ---
 
 # ESPN soccer ingestion (bronze fixtures + canonical match/league/season/team population)
@@ -65,6 +66,18 @@ specification. Findings carried in here:
 - **No auth / no API key**; a browser `User-Agent` suffices; not aggressively
   rate-limited (a ~0.1 s courtesy pace per call is sufficient).
 
+**Canonical domain model — folded in retrospectively.** The provider-agnostic
+canonical schema this conform layer populates — the `league`, `team`, `match` tables,
+the `season` entity, the `espn_match_link` / `matchbook_event_link` /
+`football_data_match_link` provider link tables, and the natural-key uniqueness tests,
+all as dbt models under `models/silver/canonical/` — was delivered *ahead* of this spec
+by commits `5cebb5e` (canonical tables + football-data link) and `fc6e37c` (season
+entity linked to league), with no spec of its own. Rather than spin up a separate
+retrospective spec for it, that schema **definition** is folded into this spec's scope
+(it is the precondition for everything below and is provider-agnostic, not ESPN-specific):
+see the added Goal in §3 and the traceability row in §11. This spec is the first
+*consumer* that populates those tables; the tables themselves predate it.
+
 This spec mirrors the patterns established by **spec 001 / the football-data.co.uk
 ingestor** (`src/data_platform/football/`, `src/data_platform/assets/football_*.py`):
 typed source registry/allowlist, single throttled cache-aware HTTP resource, faithful
@@ -114,6 +127,13 @@ provider arrives (nothing to fuzzy-match against while ESPN is sole writer).
 
 **Goals**
 
+- **(folded in, delivered by `5cebb5e`/`fc6e37c`)** Define the provider-agnostic
+  **canonical domain model** as dbt models under `models/silver/canonical/`: the
+  `league`, `season`, `team` and `match` tables (the `league (1)──(N) season (1)──(N)
+  match` chain), the `espn_match_link` / `matchbook_event_link` /
+  `football_data_match_link` provider link tables (the latter two as typed empty
+  scaffolds until their conform layers land), and the natural-key uniqueness tests —
+  the schema this ESPN conform layer is the first to populate.
 - Land **bronze ESPN event Parquet, faithful-to-source** (the full event payload
   preserved), partitioned per fetched unit (per league per season), on each run.
 - Populate the canonical `league`, `season`, `team` and `match` tables from ESPN bronze
@@ -494,3 +514,4 @@ No blockers remain. The previously-open Q1 is resolved and Q2/Q3 are accepted:
 | **(c)** de-dup against existing matches; ESPN & future providers resolve to the same `match_id` | Match identity via a provider-agnostic resolver; UTC calendar-date key; seeded alias resolution; unknown-name handling; a second provider resolves to the same match_id via the same resolver | Match identity is computed by a provider-agnostic resolver; Date component uses the UTC calendar date of kickoff; Team alias resolution maps provider names to one canonical team (seeded); A second provider for the same fixture resolves to the same match_id | AC6, AC6b, AC7, AC7b, AC8 |
 | **(d)** run on a schedule every 6 hours | 6-hourly schedule; ESPN is its own job excluded from all()-based jobs | The flow runs every 6 hours; ESPN is its own job, excluded from all()-based jobs | AC9, AC10 |
 | (cross-cutting robustness, implied by a/b/d) | per-unit failure isolation; empty-window handling; canonical tests pass | League/season fetch failure (E1); zero-event window (E2); invalid event dropped (E3) | AC11 |
+| **Canonical model definition** (folded in; `source_commits` 5cebb5e, fc6e37c) | provider-agnostic `league/season/team/match` + provider link tables + natural-key tests as dbt models under `models/silver/canonical/` — the schema this conform layer populates | Pre-match fixture creates canonical rows (consumes the model); A second provider resolves to the same match_id (relies on the provider-agnostic link tables) | AC3 (populates the model), AC5 (writes the provider link table) |
