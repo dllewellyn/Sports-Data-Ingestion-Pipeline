@@ -8,3 +8,7 @@ data_platform:
       threads: 4
       extensions:
         - parquet
+        - ducklake
+      attach:
+        - path: "ducklake:{{ env_var('POSTGRES_CATALOG_URL', 'postgresql://ducklake:ducklake@ducklake-catalog:5432/ducklake') }}"
+          alias: lake
