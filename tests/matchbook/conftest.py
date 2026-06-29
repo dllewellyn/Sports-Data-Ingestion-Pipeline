@@ -4,6 +4,8 @@ Silences the matchbook ingest OTel tracer so tests don't need a live collector.
 Tests that assert on spans override this target with their own monkeypatch.
 """
 
+import contextlib
+
 import pytest
 
 
@@ -24,10 +26,7 @@ class _NoOpTracer:
 
 @pytest.fixture(autouse=True)
 def _silence_matchbook_otel(monkeypatch: pytest.MonkeyPatch) -> None:
-    try:
+    with contextlib.suppress(ImportError, AttributeError):
         monkeypatch.setattr(
             "data_platform.matchbook.ingest.get_tracer", lambda *a, **k: _NoOpTracer()
         )
-    except (ImportError, AttributeError):
-        # ingest module not yet present (e.g. during S1 contract tests before S2)
-        pass

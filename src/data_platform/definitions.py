@@ -17,6 +17,7 @@ from .assets.espn import espn_bronze
 from .assets.football_extra import football_extra
 from .assets.football_main import football_main
 from .assets.gold import publish_gold_parquet
+from .assets.matchbook_events import matchbook_events_bronze
 from .espn.http_client import ThrottledHttpClient as EspnThrottledHttpClient
 from .football.http_client import ThrottledHttpClient
 from .otel import configure_telemetry
@@ -48,9 +49,13 @@ espn_assets = AssetSelection.assets(
     AssetKey(["silver", "team_aliases"]),
 )
 
+# Matchbook events bronze ingest: standalone 6-hourly source, excluded from the
+# all()-based hello-world job. Run via dedicated `matchbook_events_ingestion` job.
+matchbook_events_assets = AssetSelection.assets(matchbook_events_bronze)
+
 medallion_job = define_asset_job(
     name="medallion_hello_world",
-    selection=AssetSelection.all() - football_assets - espn_assets,
+    selection=AssetSelection.all() - football_assets - espn_assets - matchbook_events_assets,
     description="End-to-end: ingest raw users -> dbt silver/gold (+tests) -> gold Parquet.",
 )
 
@@ -86,6 +91,19 @@ espn_schedule = ScheduleDefinition(
     cron_schedule="0 */6 * * *",
 )
 
+# Matchbook events: dedicated job + 6-hourly schedule.
+matchbook_events_job = define_asset_job(
+    name="matchbook_events_ingestion",
+    selection=matchbook_events_assets,
+    description="Matchbook open events (football + rugby union) → bronze Parquet every 6 hours.",
+)
+
+matchbook_events_schedule = ScheduleDefinition(
+    name="matchbook_events_schedule",
+    job=matchbook_events_job,
+    cron_schedule="0 */6 * * *",
+)
+
 defs = Definitions(
     assets=[
         raw_users,
@@ -94,9 +112,10 @@ defs = Definitions(
         football_main,
         football_extra,
         espn_bronze,
+        matchbook_events_bronze,
     ],
-    jobs=[medallion_job, football_backfill_job, espn_job],
-    schedules=[daily_schedule, espn_schedule],
+    jobs=[medallion_job, football_backfill_job, espn_job, matchbook_events_job],
+    schedules=[daily_schedule, espn_schedule, matchbook_events_schedule],
     resources={
         "dbt": DbtCliResource(project_dir=dbt_project),
         "football_http": ThrottledHttpClient(),

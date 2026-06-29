@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import inspect
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from dagster import AssetKey, MaterializeResult
@@ -18,9 +18,10 @@ def test_asset_key_is_correct() -> None:
 
 def test_asset_group_is_bronze() -> None:
     """matchbook_events_bronze is in the 'bronze' group (AC9)."""
-    assert matchbook_events_bronze.group_names_by_key.get(
-        AssetKey(["matchbook_events_bronze"])
-    ) == "bronze"
+    assert (
+        matchbook_events_bronze.group_names_by_key.get(AssetKey(["matchbook_events_bronze"]))
+        == "bronze"
+    )
 
 
 def test_no_future_annotations_in_asset_module() -> None:
@@ -47,12 +48,14 @@ def test_asset_returns_materialize_result_on_success(tmp_path) -> None:
         written=[SportResult("football", "written", out_path=tmp_path / "f.parquet")]
     )
 
-    with patch(
-        "data_platform.assets.matchbook_events.run_matchbook_events_ingest",
-        return_value=mock_report,
+    with (
+        patch(
+            "data_platform.assets.matchbook_events.run_matchbook_events_ingest",
+            return_value=mock_report,
+        ),
+        build_asset_context() as ctx,
     ):
-        with build_asset_context() as ctx:
-            result = matchbook_events_bronze(ctx)
+        result = matchbook_events_bronze(ctx)
 
     assert isinstance(result, MaterializeResult)
 
@@ -61,10 +64,12 @@ def test_asset_reraises_on_ingest_failure(tmp_path) -> None:
     """matchbook_events_bronze re-raises when run_matchbook_events_ingest raises."""
     from dagster import build_asset_context
 
-    with patch(
-        "data_platform.assets.matchbook_events.run_matchbook_events_ingest",
-        side_effect=RuntimeError("matchbook ingest failed: 1 failures"),
+    with (
+        patch(
+            "data_platform.assets.matchbook_events.run_matchbook_events_ingest",
+            side_effect=RuntimeError("matchbook ingest failed: 1 failures"),
+        ),
+        pytest.raises(RuntimeError, match="failures"),
+        build_asset_context() as ctx,
     ):
-        with pytest.raises(RuntimeError, match="failures"):
-            with build_asset_context() as ctx:
-                matchbook_events_bronze(ctx)
+        matchbook_events_bronze(ctx)

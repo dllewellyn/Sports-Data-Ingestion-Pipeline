@@ -77,3 +77,51 @@ def test_espn_excluded_from_hello_world_job() -> None:
     assert not (_job_keys(defs, "medallion_hello_world") & ESPN_KEYS), (
         "ESPN excluded from hello-world"
     )
+
+
+# ── Matchbook events wiring tests (Spec 004 S5 — AC9, AC10) ───────────────────
+
+
+def test_matchbook_events_job_registered() -> None:
+    """matchbook_events_ingestion job is registered (AC10)."""
+    defs = _load_defs()
+
+    job_names = {job.name for job in defs.jobs}
+    assert "matchbook_events_ingestion" in job_names
+
+    job_keys = _job_keys(defs, "matchbook_events_ingestion")
+    assert job_keys == {"matchbook_events_bronze"}
+
+
+def test_matchbook_events_schedule_six_hourly() -> None:
+    """matchbook_events_schedule cron is '0 */6 * * *' targeting the job (AC10)."""
+    defs = _load_defs()
+
+    schedules = {s.name: s for s in defs.schedules}
+    assert "matchbook_events_schedule" in schedules
+    schedule = schedules["matchbook_events_schedule"]
+    assert schedule.cron_schedule == "0 */6 * * *"
+    assert schedule.job.name == "matchbook_events_ingestion"
+
+
+def test_matchbook_events_excluded_from_hello_world() -> None:
+    """AC9 — matchbook_events_bronze IS registered in defs AND is NOT in medallion_hello_world.
+
+    Two-part assertion: first part verifies the asset is actually registered; second
+    part verifies it is excluded from the all()-based demo job.
+    """
+    defs = _load_defs()
+
+    # Part 1: asset IS registered (it should be in AssetSelection.all())
+    all_asset_keys: set[AssetKey] = set()
+    for assets_def in defs.assets:
+        all_asset_keys |= set(assets_def.keys)
+    assert AssetKey(["matchbook_events_bronze"]) in all_asset_keys, (
+        "matchbook_events_bronze must be registered in defs.assets"
+    )
+
+    # Part 2: asset is NOT in medallion_hello_world (excluded via AssetSelection subtraction)
+    hello_world_keys = _job_keys(defs, "medallion_hello_world")
+    assert "matchbook_events_bronze" not in hello_world_keys, (
+        "matchbook_events_bronze must be excluded from medallion_hello_world"
+    )

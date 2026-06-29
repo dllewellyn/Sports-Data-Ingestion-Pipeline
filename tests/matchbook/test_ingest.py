@@ -14,7 +14,6 @@ import pandas as pd
 import pytest
 
 from data_platform.matchbook.ingest import (
-    IngestionReport,
     authenticate,
     fetch_events,
     flatten_event,
@@ -76,34 +75,44 @@ def test_authenticate_raises_on_missing_token() -> None:
     resp = MagicMock()
     resp.json.return_value = {}
     resp.raise_for_status = MagicMock()
-    with patch("requests.Session.post", return_value=resp):
-        with pytest.raises(ValueError, match="session-token"):
-            authenticate("user", "pass", base_url=BASE_URL, timeout=10)
+    with (
+        patch("requests.Session.post", return_value=resp),
+        pytest.raises(ValueError, match="session-token"),
+    ):
+        authenticate("user", "pass", base_url=BASE_URL, timeout=10)
 
 
 def test_authenticate_raises_on_non_2xx() -> None:
     """Non-2xx auth response raises (E1, AC16)."""
+    import requests as req_lib
+
     resp = MagicMock()
-    resp.raise_for_status.side_effect = Exception("401 Unauthorized")
-    with patch("requests.Session.post", return_value=resp):
-        with pytest.raises(Exception):
-            authenticate("user", "pass", base_url=BASE_URL, timeout=10)
+    resp.raise_for_status.side_effect = req_lib.HTTPError("401 Unauthorized")
+    with (
+        patch("requests.Session.post", return_value=resp),
+        pytest.raises(req_lib.HTTPError),
+    ):
+        authenticate("user", "pass", base_url=BASE_URL, timeout=10)
 
 
 def test_authenticate_raises_on_empty_username() -> None:
     """Empty username raises ValueError before any HTTP call (E2, AC6)."""
-    with patch("requests.Session.post") as mock_post:
-        with pytest.raises(ValueError, match="credentials"):
-            authenticate("", "pass", base_url=BASE_URL, timeout=10)
-        mock_post.assert_not_called()
+    with (
+        patch("requests.Session.post") as mock_post,
+        pytest.raises(ValueError, match="credentials"),
+    ):
+        authenticate("", "pass", base_url=BASE_URL, timeout=10)
+    mock_post.assert_not_called()
 
 
 def test_authenticate_raises_on_empty_password() -> None:
     """Empty password raises ValueError before any HTTP call (E2, AC6)."""
-    with patch("requests.Session.post") as mock_post:
-        with pytest.raises(ValueError, match="credentials"):
-            authenticate("user", "", base_url=BASE_URL, timeout=10)
-        mock_post.assert_not_called()
+    with (
+        patch("requests.Session.post") as mock_post,
+        pytest.raises(ValueError, match="credentials"),
+    ):
+        authenticate("user", "", base_url=BASE_URL, timeout=10)
+    mock_post.assert_not_called()
 
 
 # ── fetch_events() ─────────────────────────────────────────────────────────────
@@ -131,11 +140,15 @@ def test_fetch_events_returns_empty_list_for_zero_events() -> None:
 
 def test_fetch_events_raises_on_non_2xx() -> None:
     """Non-2xx response from events endpoint raises (E4)."""
+    import requests as req_lib
+
     resp = MagicMock()
-    resp.raise_for_status.side_effect = Exception("503 Service Unavailable")
-    with patch("requests.Session.get", return_value=resp):
-        with pytest.raises(Exception):
-            fetch_events("tok", 15, base_url=BASE_URL, per_page=20, timeout=10)
+    resp.raise_for_status.side_effect = req_lib.HTTPError("503 Service Unavailable")
+    with (
+        patch("requests.Session.get", return_value=resp),
+        pytest.raises(req_lib.HTTPError),
+    ):
+        fetch_events("tok", 15, base_url=BASE_URL, per_page=20, timeout=10)
 
 
 def test_fetch_events_treats_absent_total_as_single_page(caplog) -> None:
@@ -218,7 +231,16 @@ def test_ingest_sport_parquet_has_all_columns(tmp_path: Path) -> None:
             schema=matchbook_events_bronze_schema,
         )
     df = pd.read_parquet(result)
-    for col in ["event_id", "event_name", "sport_id", "status", "start_utc", "volume", "ingested_at", "raw_event"]:
+    for col in [
+        "event_id",
+        "event_name",
+        "sport_id",
+        "status",
+        "start_utc",
+        "volume",
+        "ingested_at",
+        "raw_event",
+    ]:
         assert col in df.columns, f"missing column: {col}"
 
 
@@ -291,18 +313,18 @@ def test_ingest_sport_creates_directory_on_first_run(tmp_path: Path) -> None:
 def test_ingest_sport_replay_appends_new_file(tmp_path: Path) -> None:
     """Two runs on the same date create two distinct files (E10, AC5)."""
     events = [_valid_event("1")]
-    shared_args = dict(
-        sport_id=15,
-        sport_name="football",
-        session_token="tok",
-        base_url=BASE_URL,
-        per_page=20,
-        timeout=10,
-        out_dir=tmp_path,
-        run_date=RUN_DATE,
-        log=None,
-        schema=matchbook_events_bronze_schema,
-    )
+    shared_args = {
+        "sport_id": 15,
+        "sport_name": "football",
+        "session_token": "tok",
+        "base_url": BASE_URL,
+        "per_page": 20,
+        "timeout": 10,
+        "out_dir": tmp_path,
+        "run_date": RUN_DATE,
+        "log": None,
+        "schema": matchbook_events_bronze_schema,
+    }
     with patch("requests.Session.get", return_value=_mock_events_response(events, total=1)):
         r1, _ = ingest_sport(**shared_args, batch_ts="20260629T120000Z")
     with patch("requests.Session.get", return_value=_mock_events_response(events, total=1)):
@@ -315,7 +337,13 @@ def test_ingest_sport_replay_appends_new_file(tmp_path: Path) -> None:
 def test_ingest_sport_per_record_failures_counted_not_raised(tmp_path: Path) -> None:
     """Per-record Pydantic failures are counted; valid records written; no raise (AC7, E5)."""
     good_event = _valid_event("1")
-    bad_event = {"id": "", "name": "Bad", "sport-id": 15, "status": "open", "start": "bad"}  # invalid event_id
+    bad_event = {
+        "id": "",
+        "name": "Bad",
+        "sport-id": 15,
+        "status": "open",
+        "start": "bad",
+    }  # invalid event_id
     events = [good_event, bad_event]
     with patch("requests.Session.get", return_value=_mock_events_response(events, total=2)):
         result, failure_count = ingest_sport(
@@ -346,22 +374,24 @@ def test_ingest_sport_atomic_no_partial_file_on_failure(tmp_path: Path) -> None:
     def _failing_replace(self, target):
         raise OSError("disk full")
 
-    with patch("requests.Session.get", return_value=_mock_events_response(events, total=1)):
-        with patch("pathlib.Path.replace", _failing_replace):
-            with pytest.raises(OSError):
-                ingest_sport(
-                    sport_id=15,
-                    sport_name="football",
-                    session_token="tok",
-                    base_url=BASE_URL,
-                    per_page=20,
-                    timeout=10,
-                    out_dir=tmp_path,
-                    batch_ts=BATCH_TS,
-                    run_date=RUN_DATE,
-                    log=None,
-                    schema=matchbook_events_bronze_schema,
-                )
+    with (
+        patch("requests.Session.get", return_value=_mock_events_response(events, total=1)),
+        patch("pathlib.Path.replace", _failing_replace),
+        pytest.raises(OSError),
+    ):
+        ingest_sport(
+            sport_id=15,
+            sport_name="football",
+            session_token="tok",
+            base_url=BASE_URL,
+            per_page=20,
+            timeout=10,
+            out_dir=tmp_path,
+            batch_ts=BATCH_TS,
+            run_date=RUN_DATE,
+            log=None,
+            schema=matchbook_events_bronze_schema,
+        )
     assert not final_path.exists()
 
 
@@ -378,36 +408,40 @@ def test_run_ingest_writes_both_sports(tmp_path: Path) -> None:
         _mock_events_response(football_events, total=1),
         _mock_events_response(rugby_events, total=1),
     ]
-    with patch("requests.Session.post", return_value=_mock_auth_response()):
-        with patch("requests.Session.get", side_effect=responses):
-            report = run_matchbook_events_ingest(
-                username="user",
-                password="pass",
-                base_url=BASE_URL,
-                per_page=20,
-                timeout=10,
-                out_dir=tmp_path,
-                log=None,
-                schema=matchbook_events_bronze_schema,
-            )
+    with (
+        patch("requests.Session.post", return_value=_mock_auth_response()),
+        patch("requests.Session.get", side_effect=responses),
+    ):
+        report = run_matchbook_events_ingest(
+            username="user",
+            password="pass",
+            base_url=BASE_URL,
+            per_page=20,
+            timeout=10,
+            out_dir=tmp_path,
+            log=None,
+            schema=matchbook_events_bronze_schema,
+        )
     assert len(report.written) == 2
     assert len(report.failed) == 0
 
 
 def test_run_ingest_zero_events_all_sports_succeeds(tmp_path: Path) -> None:
     """Zero events for all sports: run succeeds, no Parquet written (E8)."""
-    with patch("requests.Session.post", return_value=_mock_auth_response()):
-        with patch("requests.Session.get", return_value=_mock_events_response([], total=0)):
-            report = run_matchbook_events_ingest(
-                username="user",
-                password="pass",
-                base_url=BASE_URL,
-                per_page=20,
-                timeout=10,
-                out_dir=tmp_path,
-                log=None,
-                schema=matchbook_events_bronze_schema,
-            )
+    with (
+        patch("requests.Session.post", return_value=_mock_auth_response()),
+        patch("requests.Session.get", return_value=_mock_events_response([], total=0)),
+    ):
+        report = run_matchbook_events_ingest(
+            username="user",
+            password="pass",
+            base_url=BASE_URL,
+            per_page=20,
+            timeout=10,
+            out_dir=tmp_path,
+            log=None,
+            schema=matchbook_events_bronze_schema,
+        )
     assert not list(tmp_path.rglob("*.parquet"))
     assert len(report.written) == 0
 
@@ -421,18 +455,20 @@ def test_run_ingest_zero_events_one_sport_continues(tmp_path: Path) -> None:
         _mock_events_response([], total=0),
         _mock_events_response(rugby_events, total=1),
     ]
-    with patch("requests.Session.post", return_value=_mock_auth_response()):
-        with patch("requests.Session.get", side_effect=responses):
-            report = run_matchbook_events_ingest(
-                username="user",
-                password="pass",
-                base_url=BASE_URL,
-                per_page=20,
-                timeout=10,
-                out_dir=tmp_path,
-                log=None,
-                schema=matchbook_events_bronze_schema,
-            )
+    with (
+        patch("requests.Session.post", return_value=_mock_auth_response()),
+        patch("requests.Session.get", side_effect=responses),
+    ):
+        report = run_matchbook_events_ingest(
+            username="user",
+            password="pass",
+            base_url=BASE_URL,
+            per_page=20,
+            timeout=10,
+            out_dir=tmp_path,
+            log=None,
+            schema=matchbook_events_bronze_schema,
+        )
     parquet_files = list(tmp_path.rglob("*.parquet"))
     assert len(parquet_files) == 1
     assert "rugby_union" in str(parquet_files[0])
@@ -450,19 +486,21 @@ def test_run_ingest_reraises_on_failures(tmp_path: Path) -> None:
         _mock_events_response([good_event, bad_event], total=2),  # football: 1 valid + 1 bad
         _mock_events_response([], total=0),  # rugby: no events
     ]
-    with patch("requests.Session.post", return_value=_mock_auth_response()):
-        with patch("requests.Session.get", side_effect=responses):
-            with pytest.raises(RuntimeError, match="failures"):
-                run_matchbook_events_ingest(
-                    username="user",
-                    password="pass",
-                    base_url=BASE_URL,
-                    per_page=20,
-                    timeout=10,
-                    out_dir=tmp_path,
-                    log=None,
-                    schema=matchbook_events_bronze_schema,
-                )
+    with (
+        patch("requests.Session.post", return_value=_mock_auth_response()),
+        patch("requests.Session.get", side_effect=responses),
+        pytest.raises(RuntimeError, match="failures"),
+    ):
+        run_matchbook_events_ingest(
+            username="user",
+            password="pass",
+            base_url=BASE_URL,
+            per_page=20,
+            timeout=10,
+            out_dir=tmp_path,
+            log=None,
+            schema=matchbook_events_bronze_schema,
+        )
 
 
 # ── OTel span ──────────────────────────────────────────────────────────────────
@@ -476,7 +514,7 @@ def test_otel_span_emitted(tmp_path: Path) -> None:
     class _TrackingSpan:
         def set_attribute(self, *a, **k) -> None: ...
 
-        def __enter__(self) -> "_TrackingSpan":
+        def __enter__(self) -> _TrackingSpan:
             return self
 
         def __exit__(self, *a) -> bool:
@@ -487,23 +525,23 @@ def test_otel_span_emitted(tmp_path: Path) -> None:
             spans_started.append(name)
             return _TrackingSpan()
 
-    with patch(
-        "data_platform.matchbook.ingest.get_tracer", return_value=_TrackingTracer()
+    with (
+        patch("data_platform.matchbook.ingest.get_tracer", return_value=_TrackingTracer()),
+        patch("requests.Session.post", return_value=_mock_auth_response()),
+        patch(
+            "requests.Session.get",
+            return_value=_mock_events_response(events, total=1),
+        ),
     ):
-        with patch("requests.Session.post", return_value=_mock_auth_response()):
-            with patch(
-                "requests.Session.get",
-                return_value=_mock_events_response(events, total=1),
-            ):
-                run_matchbook_events_ingest(
-                    username="user",
-                    password="pass",
-                    base_url=BASE_URL,
-                    per_page=20,
-                    timeout=10,
-                    out_dir=tmp_path,
-                    log=None,
-                    schema=matchbook_events_bronze_schema,
-                )
+        run_matchbook_events_ingest(
+            username="user",
+            password="pass",
+            base_url=BASE_URL,
+            per_page=20,
+            timeout=10,
+            out_dir=tmp_path,
+            log=None,
+            schema=matchbook_events_bronze_schema,
+        )
 
     assert "ingest.matchbook_events" in spans_started
