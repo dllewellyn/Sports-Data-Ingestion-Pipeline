@@ -1,4 +1,5 @@
 """Verify DuckDB runtime version satisfies the DuckLake 1.0 minimum (Spec 002)."""
+
 import duckdb
 from packaging.version import Version
 

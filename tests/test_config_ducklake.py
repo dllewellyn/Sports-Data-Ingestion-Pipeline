@@ -1,4 +1,5 @@
 """Verify DuckLake config fields have correct defaults (Spec 002)."""
+
 from pathlib import Path
 
 from data_platform.config import Settings
