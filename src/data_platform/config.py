@@ -96,5 +96,37 @@ class Settings(BaseSettings):
         """Bronze partition root for ESPN soccer ingestion (espn/...)."""
         return self.bronze_dir / "espn"
 
+    # ── Matchbook conform layer (Spec 006) ──────────────────────────────────
+
+    @property
+    def matchbook_conform_canonical_dir(self) -> Path:
+        """Silver canonical Parquet exports (team.parquet, match.parquet) — written by dbt."""
+        return self.silver_dir / "canonical"
+
+    @property
+    def matchbook_conform_dir(self) -> Path:
+        """Resolved conform links Parquet output dir (matchbook_resolved_links.parquet)."""
+        return self.silver_dir
+
+    @property
+    def matchbook_canonical_additions_dir(self) -> Path:
+        """New-canonical additions Parquet dir (matchbook_canonical_additions.parquet)."""
+        return self.silver_dir
+
+    @property
+    def matchbook_exceptions_dir(self) -> Path:
+        """Exceptions Parquet dir (matchbook_unresolved.parquet)."""
+        return self.data_dir / "exceptions"
+
+    @property
+    def matchbook_overrides_dir(self) -> Path:
+        """Human override decisions Parquet dir (matchbook_overrides.parquet)."""
+        return self.data_dir / "manual_links"
+
+    @property
+    def matchbook_t60_dir(self) -> Path:
+        """T-60 enrichment Parquet dir (matchbook_t60_enrichment.parquet)."""
+        return self.silver_dir
+
 
 settings = Settings()

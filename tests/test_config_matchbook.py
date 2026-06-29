@@ -62,3 +62,42 @@ def test_matchbook_bronze_dir_still_returns_matchbook_odds() -> None:
     """matchbook_bronze_dir still returns bronze_dir / 'matchbook_odds' (not renamed)."""
     s = Settings()
     assert s.matchbook_bronze_dir == s.bronze_dir / "matchbook_odds"
+
+
+# ── Spec 006 conform layer Settings fields ──────────────────────────────────
+
+
+def test_matchbook_conform_canonical_dir() -> None:
+    """matchbook_conform_canonical_dir returns silver_dir / 'canonical' (Spec 006 S0)."""
+    s = Settings()
+    assert s.matchbook_conform_canonical_dir == s.silver_dir / "canonical"
+
+
+def test_matchbook_conform_dir() -> None:
+    """matchbook_conform_dir returns silver_dir (Spec 006 S0)."""
+    s = Settings()
+    assert s.matchbook_conform_dir == s.silver_dir
+
+
+def test_matchbook_canonical_additions_dir() -> None:
+    """matchbook_canonical_additions_dir returns silver_dir (Spec 006 S0)."""
+    s = Settings()
+    assert s.matchbook_canonical_additions_dir == s.silver_dir
+
+
+def test_matchbook_exceptions_dir() -> None:
+    """matchbook_exceptions_dir returns data_dir / 'exceptions' (Spec 006 S0)."""
+    s = Settings()
+    assert s.matchbook_exceptions_dir == s.data_dir / "exceptions"
+
+
+def test_matchbook_overrides_dir() -> None:
+    """matchbook_overrides_dir returns data_dir / 'manual_links' (Spec 006 S0)."""
+    s = Settings()
+    assert s.matchbook_overrides_dir == s.data_dir / "manual_links"
+
+
+def test_matchbook_t60_dir() -> None:
+    """matchbook_t60_dir returns silver_dir (Spec 006 S0)."""
+    s = Settings()
+    assert s.matchbook_t60_dir == s.silver_dir
