@@ -259,6 +259,7 @@ run via pre-commit) — don't hand-format; let `ruff format` decide. Lint set is
   prefer context managers for DuckDB connections / spans (`with ... as`).
 - Keep functions side-effect-honest: an asset either produces its artifact or
   raises — no silent fallbacks, defaults-on-failure, or stubbed data.
+- **Matchbook session-token auth:** Auth lives in a standalone `authenticate(username, password, *, base_url, timeout) -> str` function in the ingest module so it is unit-testable without Dagster. POST credentials to the auth endpoint; call `response.raise_for_status()` before inspecting the body; raise `ValueError("session-token not present in auth response")` if the key is absent. Acquire exactly one token per asset run — do not refresh mid-run. Auth failure raises before any Parquet write is attempted.
 - **Run ruff on the files you changed, not the whole tree.** `ruff format src` (or a
   task that lints `src` wholesale) reformats unrelated, pre-existing files and drags
   them into your change set. Scope ruff to your own files; the pre-commit hook
