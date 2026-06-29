@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     data_dir: Path = Path("data")
     duckdb_path: Path = Path("data/warehouse.duckdb")
 
+    # DuckLake catalog
+    postgres_catalog_url: str = "postgresql://ducklake:ducklake@ducklake-catalog:5432/ducklake"
+    ducklake_data_path: Path = Path("data/lake")
+
     # OpenTelemetry
     otel_service_name: str = "data-platform"
     otel_exporter_otlp_endpoint: str = "http://localhost:4317"
