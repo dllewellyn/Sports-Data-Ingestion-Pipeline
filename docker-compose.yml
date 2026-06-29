@@ -94,24 +94,6 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # DuckDB UI — browser SQL interface at http://localhost:4213
-  # Opens warehouse.duckdb READ_ONLY (single-writer constraint preserved).
-  # Also attaches the DuckLake catalog for browsing catalog-managed tables.
-  duckdb-ui:
-    <<: *app
-    ports:
-      - "4213:4214"
-    depends_on:
-      ducklake-catalog:
-        condition: service_healthy
-    command: python scripts/run_duckdb_ui.py
-    healthcheck:
-      test: ["CMD-SHELL", "python3 -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:4214\")' || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
-
 volumes:
   dagster_home:
   ducklake_catalog:
