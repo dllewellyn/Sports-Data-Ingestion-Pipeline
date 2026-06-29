@@ -82,6 +82,9 @@ raw_users ──▶ silver/stg_users ──▶ gold/dim_users_by_city ──▶ 
 - **DuckDB single-writer constraint applies to `warehouse.duckdb` only (applies to warehouse.duckdb only; DuckLake-managed tables support concurrent access).** Do NOT open `warehouse.duckdb` read-write from a second process/Dagster step — a separate process cannot see dbt's un-checkpointed WAL writes and gets phantom "schema does not exist" catalog errors. After Spec 003, `profiles.yml` `path:` points at the DuckLake catalog; `DUCKDB_PATH` is kept only for the DuckDB UI service. Silver and gold dbt models now write to DuckLake (the PostgreSQL-backed catalog), which supports concurrent readers. The gold external Parquet export (`users_by_city_export.sql`) still writes a file — have Python read the resulting **file**, not any catalog table.
 - **DuckDB UI must open `warehouse.duckdb` READ_ONLY.** The `duckdb-ui` container attaches `warehouse.duckdb` with `(READ_ONLY)` to preserve the single-writer invariant for that file. Any future service or notebook that browses it must do the same. The DuckLake catalog Postgres service is independent and does not touch the `.duckdb` file.
 - **`DATA_PATH` in the DuckLake `attach` stanza must match across all consumers.** The `profiles.yml` `attach:` entry and the `duckdb-ui` container's entrypoint both specify a `DATA_PATH`. A mismatch silently creates two separate lake data directories — DuckLake writes tables into one, the UI browses an empty catalog in the other. The canonical value is `/app/data/lake/` (container path); `./data/lake/` on the host.
+- **Remove the `attach:` stanza when switching `profiles.yml` `path:` to DuckLake.** During incremental adoption (Spec 002), DuckLake was introduced via `attach:` (alias `lake`) while `path:` still pointed at `warehouse.duckdb`. After switching `path:` to the DuckLake catalog URI, the `attach:` entry must be deleted — keeping both causes a double-attach of the same catalog, which raises a cryptic error on startup.
+- **`dbt-duckdb` does NOT need `is_ducklake: true` for a PostgreSQL-backed DuckLake path.** `path: "ducklake:postgresql://..."` is sufficient for `dbt-duckdb 1.10.1`+; `is_ducklake: true` is only needed for MotherDuck paths.
+- **`dbt parse` exits 0 even without a live Postgres catalog connection.** Parse only reads model SQL to generate the manifest; it does not connect to the catalog. Safe to run in CI without the DuckLake catalog service standing up.
 - **DuckDB runtime >=1.5.2 required for the DuckLake 1.0 extension.** The Python package in `pyproject.toml` is pinned `>=1.5.2`; the `duckdb/duckdb:latest` Docker image must also satisfy this. If pinning to an older tag, verify it ships DuckDB >=1.5.2.
 - **The canonical domain schema lives as dbt models, not raw DDL.** `team`,
   `league`, `match`, and the `*_match_link`/`*_event_link` tables are dbt models
@@ -107,7 +110,10 @@ raw_users ──▶ silver/stg_users ──▶ gold/dim_users_by_city ──▶ 
   *node selector* DOES include the subfolder** — it's `silver.canonical.*` (e.g.
   `dbt build --select silver.canonical.match`); `silver.match` selects nothing and
   gives a vacuous green. So: Dagster `AssetKey(["silver","match"])` vs dbt selector
-  `silver.canonical.match` — two different namings, both load-bearing.
+  `silver.canonical.match` — two different namings, both load-bearing. Note: switching
+  `profiles.yml` `path:` to DuckLake changes the manifest `database` field from
+  `warehouse` to `ducklake`; this does NOT affect AssetKey derivation (which uses
+  schema prefix only) — confirmed via `dagster definitions validate`.
 - **Canonical match identity goes through the `canonical_match_id` dbt macro — never
   a provider event id.** `match_id` is `md5` over the *canonical resolved* natural
   key (canonical league_id, season_id, UTC kickoff date, seed-resolved home/away
