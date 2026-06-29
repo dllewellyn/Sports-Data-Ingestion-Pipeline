@@ -203,6 +203,50 @@ class EspnEventRecord(BaseModel):
         return str(v).strip()
 
 
+class MatchbookEventRecord(BaseModel):
+    """One Matchbook open event — mandatory core enforced per record.
+
+    Events missing a core field (event id, name, status, start time) fail here
+    and are skipped-and-counted by the ingestor (E5, E11, E12). volume is nullable
+    since not all events have matched liquidity. The complete original event JSON
+    is preserved verbatim in ``raw_event`` so bronze stays faithful to source.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    event_id: str
+    event_name: str
+    sport_id: int
+    status: str
+    start_utc: str
+    volume: float | None = None
+    ingested_at: str
+    # The complete original event JSON, preserved verbatim (faithful bronze).
+    raw_event: str
+
+    @field_validator(
+        "event_id",
+        "event_name",
+        "status",
+        "start_utc",
+        "ingested_at",
+        "raw_event",
+        mode="before",
+    )
+    @classmethod
+    def _required_text(cls, v: object) -> str:
+        if _missing(v):
+            raise ValueError("required core field empty")
+        return str(v).strip()
+
+    @field_validator("sport_id", mode="before")
+    @classmethod
+    def _coerce_sport_id(cls, v: object) -> int:
+        if _missing(v):
+            raise ValueError("sport_id required")
+        return int(v)
+
+
 class MatchbookOddsRecord(BaseModel):
     """One Matchbook odds tick — validated at the Redis pub/sub boundary.
 
@@ -251,5 +295,6 @@ __all__ = [
     "MainMatchRecord",
     "ExtraMatchRecord",
     "EspnEventRecord",
+    "MatchbookEventRecord",
     "MatchbookOddsRecord",
 ]

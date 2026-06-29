@@ -88,3 +88,26 @@ espn_bronze_schema = pa.DataFrameSchema(
     strict=False,
     coerce=True,
 )
+
+
+# --- Matchbook Events REST API bronze frame contract (Spec 004) ----------------
+# OPEN (`strict=False`): only the mandatory event core is declared; the wide API
+# payload (markets, runners, ...) rides along in ``raw_event``. ``volume`` is
+# nullable since not all events have matched liquidity. The per-record core is
+# enforced upstream by Pydantic (schemas.py).
+
+matchbook_events_bronze_schema = pa.DataFrameSchema(
+    {
+        "event_id": pa.Column(str, nullable=False),
+        "event_name": pa.Column(str, nullable=False),
+        "sport_id": pa.Column(int, nullable=False, coerce=True),
+        "status": pa.Column(str, nullable=False),
+        "start_utc": pa.Column(str, nullable=False),
+        "volume": pa.Column(float, nullable=True),
+        "ingested_at": pa.Column(str, nullable=False),
+        # faithful bronze: the complete original event JSON preserved verbatim.
+        "raw_event": pa.Column(str, nullable=False),
+    },
+    strict=False,
+    coerce=True,
+)
