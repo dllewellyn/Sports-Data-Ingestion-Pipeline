@@ -12,7 +12,7 @@ dependencies = [
     "dbt-core>=1.9",
     "dbt-duckdb>=1.9",
     # Storage / engine
-    "duckdb>=1.1",
+    "duckdb>=1.5.2",  # DuckLake 1.0 requires the DuckDB runtime to be >=1.5.2; Docker image must satisfy this independently
     "pyarrow>=18.0",
     "redis>=5.0",
     # Dataframes + HTTP
