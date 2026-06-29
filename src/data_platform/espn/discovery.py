@@ -13,6 +13,7 @@ runs over unchanged source content produce an identical unit list.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -47,10 +48,24 @@ def _scoreboard_url(site_base_url: str, slug: str, start: date, end: date) -> st
     return f"{site_base_url}/apis/site/v2/sports/soccer/{slug}/scoreboard?dates={window}&limit=1000"
 
 
-def _resolve_seasons(fetch_json: Callable[[str], dict], url: str) -> list[EspnSeason]:
+def _resolve_seasons(
+    fetch_json: Callable[[str], dict], url: str, run_date: date | None = None
+) -> list[EspnSeason]:
     payload = fetch_json(url)
     seasons: list[EspnSeason] = []
     for item in payload.get("items", []):
+        if "$ref" in item and "year" not in item:
+            ref = item["$ref"]
+            match = re.search(r"/seasons/(\d{4})", ref)
+            if match and run_date is not None:
+                year = int(match.group(1))
+                if abs(year - run_date.year) > 1:
+                    continue
+            ref_url = ref.replace("http://", "https://")
+            try:
+                item = fetch_json(ref_url)
+            except Exception:
+                continue
         try:
             seasons.append(
                 EspnSeason(
@@ -80,7 +95,9 @@ def discover_units(
     """
     units: dict[tuple[str, int], EspnUnit] = {}
     for league in leagues:
-        seasons = _resolve_seasons(fetch_json, _seasons_url(core_base_url, league.slug))
+        seasons = _resolve_seasons(
+            fetch_json, _seasons_url(core_base_url, league.slug), run_date=run_date
+        )
         for season in select_season_windows(seasons, run_date, horizon_days):
             unit = EspnUnit(
                 league_slug=league.slug,
