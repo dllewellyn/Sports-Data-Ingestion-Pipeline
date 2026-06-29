@@ -17,9 +17,15 @@ class Settings(BaseSettings):
     # Source
     api_base_url: str = "https://jsonplaceholder.typicode.com"
 
-    # Matchbook Redis ingestion
+    # Matchbook Redis ingestion (odds ticks via pub/sub)
     matchbook_redis_host: str = "redis"
     matchbook_redis_port: int = 6379
+
+    # Matchbook Events REST API ingestion (bronze Parquet, Spec 004)
+    matchbook_username: str = ""
+    matchbook_password: str = ""
+    matchbook_throttle_seconds: float = 0.0  # declared for future use; not wired in this spec
+    matchbook_events_base_url: str = "https://api.matchbook.com"
 
     # football-data.co.uk ingestion (bronze source)
     football_base_url: str = "https://www.football-data.co.uk/"
@@ -69,6 +75,11 @@ class Settings(BaseSettings):
     def matchbook_bronze_dir(self) -> Path:
         """Bronze partition root for Matchbook odds ticks (matchbook_odds/...)."""
         return self.bronze_dir / "matchbook_odds"
+
+    @property
+    def matchbook_events_bronze_dir(self) -> Path:
+        """Bronze partition root for Matchbook Events REST API ingestion (matchbook_events/...)."""
+        return self.bronze_dir / "matchbook_events"
 
     @property
     def football_main_dir(self) -> Path:
