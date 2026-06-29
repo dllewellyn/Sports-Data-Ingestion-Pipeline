@@ -133,6 +133,10 @@ raw_users ──▶ silver/stg_users ──▶ gold/dim_users_by_city ──▶ 
   `/opt/venv` (not `/app`) so the `./src` bind-mount for live reload doesn't
   shadow installed dependencies.
 
+#### ESPN soccer bronze ingestion (`espn/` + `assets/espn.py`)
+
+- **`/seasons` API returns `$ref` link references, not inline objects.** ESPN's `/v2/sports/soccer/leagues/{slug}/seasons` endpoint returns a list of items containing only `{"$ref": "..."}` URLs. Discovery must extract the year or follow `$ref` links rather than expecting inline `year`/`startDate`/`endDate` fields. To avoid slow network scans across decades of historical seasons during discovery, filter `$ref` URLs by year before fetching reference details.
+
 #### football-data.co.uk bronze ingestion (`football/` + `assets/football_*.py`)
 
 - **The two families need different mandated encodings — this is load-bearing.**
