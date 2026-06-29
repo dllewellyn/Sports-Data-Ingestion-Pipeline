@@ -3,12 +3,8 @@ data_platform:
   outputs:
     dev:
       type: duckdb
-      # Same DuckDB file the Dagster gold export reads.
-      path: "{{ env_var('DUCKDB_PATH', '/app/data/warehouse.duckdb') }}"
+      path: "ducklake:{{ env_var('POSTGRES_CATALOG_URL', 'postgresql://ducklake:ducklake@ducklake-catalog:5432/ducklake') }}"
       threads: 4
       extensions:
         - parquet
         - ducklake
-      attach:
-        - path: "ducklake:{{ env_var('POSTGRES_CATALOG_URL', 'postgresql://ducklake:ducklake@ducklake-catalog:5432/ducklake') }}"
-          alias: lake
