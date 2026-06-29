@@ -484,7 +484,7 @@ requires-dist = [
     { name = "dagster-webserver", specifier = ">=1.9" },
     { name = "dbt-core", specifier = ">=1.9" },
     { name = "dbt-duckdb", specifier = ">=1.9" },
-    { name = "duckdb", specifier = ">=1.1" },
+    { name = "duckdb", specifier = ">=1.5.2" },
     { name = "jupyterlab", specifier = ">=4.3" },
     { name = "opentelemetry-exporter-otlp-proto-grpc", specifier = ">=1.29" },
     { name = "opentelemetry-instrumentation-requests", specifier = ">=0.50b0" },

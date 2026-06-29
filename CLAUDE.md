@@ -85,6 +85,9 @@ raw_users ──▶ silver/stg_users ──▶ gold/dim_users_by_city ──▶ 
   "schema does not exist" catalog errors. Produce derived Parquet *inside dbt*
   (the `external` materialization in `gold/users_by_city_export.sql`) and have
   Python read the resulting **file**, not the warehouse table.
+- **DuckDB UI must open `warehouse.duckdb` READ_ONLY.** The `duckdb-ui` container attaches `warehouse.duckdb` with `(READ_ONLY)` to preserve the single-writer invariant. Any future service or notebook that browses the warehouse must do the same. The DuckLake catalog Postgres service is independent and does not touch the `.duckdb` file.
+- **DuckLake adoption is incremental: catalog in Spec 002, model migration in Spec 003.** The `ducklake-catalog` Postgres service and the `ducklake` dbt extension are wired in Spec 002, but no existing silver/gold models are migrated. The catalog is available as the `lake` attachment in dbt sessions. Do not move models to DuckLake until Spec 003.
+- **DuckDB runtime >=1.5.2 required for the DuckLake 1.0 extension.** The Python package in `pyproject.toml` is pinned `>=1.5.2`; the `duckdb/duckdb:latest` Docker image must also satisfy this. If pinning to an older tag, verify it ships DuckDB >=1.5.2.
 - **The canonical domain schema lives as dbt models, not raw DDL.** `team`,
   `league`, `match`, and the `*_match_link`/`*_event_link` tables are dbt models
   under `dbt/data_platform/models/silver/canonical/`. The **ESPN conform layer**

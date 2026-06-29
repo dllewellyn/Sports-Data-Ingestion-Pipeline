@@ -50,6 +50,14 @@ services:
       REDIS_PORT: "6379"
       DEPLOYMENT_ENVIRONMENT: remote
 
+  duckdb-ui:
+    networks:
+      - sports-quant
+
+  ducklake-catalog:
+    networks:
+      - sports-quant
+
 networks:
   sports-quant:
     name: sports-quant

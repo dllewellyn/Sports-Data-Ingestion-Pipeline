@@ -79,6 +79,14 @@ services:
   jupyter:
     <<: *dev-app
 
+  duckdb-ui:
+    networks:
+      - signoz-net
+
+  ducklake-catalog:
+    networks:
+      - signoz-net
+
   # --- Self-hosted SigNoz stack ---
   # One-shot: fetches the histogram-quantile UDF binary into ClickHouse's
   # user_scripts (needs internet on first run).

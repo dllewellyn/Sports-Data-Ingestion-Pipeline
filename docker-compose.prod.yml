@@ -25,6 +25,8 @@ services:
     <<: *prod-app
   matchbook-ingestor:
     <<: *prod-app
+  duckdb-ui:
+    <<: *prod-app
 
 # networks:
 #   otel-external:
