@@ -8,7 +8,7 @@ from data_platform.config import Settings
 def test_postgres_catalog_url_default():
     s = Settings()
     assert s.postgres_catalog_url == (
-        "postgresql://ducklake:ducklake@ducklake-catalog:5432/ducklake"
+        "postgres:dbname=ducklake user=ducklake password=ducklake host=ducklake-catalog port=5432"
     )
 
 

@@ -61,3 +61,26 @@ def test_discover_is_deterministic_and_sorted() -> None:
     )
     slugs = [(u.league_slug, u.season_year) for u in units]
     assert slugs == sorted(slugs)
+
+
+def test_discover_clamps_long_season_window() -> None:
+    def fetch_json(url: str) -> dict:
+        return {
+            "items": [
+                {"year": 2026, "startDate": "2026-06-05T00:00Z", "endDate": "2027-07-01T00:00Z"},
+            ]
+        }
+
+    ita = EspnLeague("ita.1", "Serie A")
+    units = discover_units(
+        fetch_json,
+        [ita],
+        run_date=date(2026, 6, 10),
+        horizon_days=30,
+        core_base_url=CORE,
+        site_base_url=SITE,
+    )
+    assert len(units) == 1
+    u = units[0]
+    assert u.end_date == date(2027, 6, 5)
+    assert "dates=20260605-20270605" in u.scoreboard_url

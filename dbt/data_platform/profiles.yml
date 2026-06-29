@@ -3,8 +3,12 @@ data_platform:
   outputs:
     dev:
       type: duckdb
-      path: "ducklake:{{ env_var('POSTGRES_CATALOG_URL', 'postgresql://ducklake:ducklake@ducklake-catalog:5432/ducklake') }}"
+      path: "{{ env_var('DUCKDB_PATH', '/app/data/warehouse.duckdb') }}"
       threads: 4
       extensions:
         - parquet
+        - postgres
         - ducklake
+      attach:
+        - path: "ducklake:{{ env_var('POSTGRES_CATALOG_URL', 'postgres:dbname=ducklake user=ducklake password=ducklake host=ducklake-catalog port=5432') }}"
+          alias: lake

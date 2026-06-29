@@ -43,7 +43,9 @@ class Settings(BaseSettings):
     duckdb_path: Path = Path("data/warehouse.duckdb")
 
     # DuckLake catalog
-    postgres_catalog_url: str = "postgresql://ducklake:ducklake@ducklake-catalog:5432/ducklake"
+    postgres_catalog_url: str = (
+        "postgres:dbname=ducklake user=ducklake password=ducklake host=ducklake-catalog port=5432"
+    )
     ducklake_data_path: Path = Path("data/lake")
 
     # OpenTelemetry

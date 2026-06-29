@@ -18,7 +18,7 @@ x-app: &app
     DAGSTER_HOME: /app/.dagster
     DATA_DIR: /app/data
     DUCKDB_PATH: /app/data/warehouse.duckdb
-    POSTGRES_CATALOG_URL: "postgresql://ducklake:ducklake@ducklake-catalog:5432/ducklake"
+    POSTGRES_CATALOG_URL: "postgres:dbname=ducklake user=ducklake password=ducklake host=ducklake-catalog port=5432"
     PYTHONPATH: /app/src
     # OTEL_EXPORTER_OTLP_ENDPOINT is set by the overlay (dev -> SigNoz collector,
     # prod -> external collector), so the base stays environment-neutral.
@@ -106,14 +106,10 @@ services:
     depends_on:
       ducklake-catalog:
         condition: service_healthy
-    entrypoint: >
-      sh -c "duckdb -cmd
-        \"INSTALL ui; LOAD ui;
-          INSTALL ducklake; LOAD ducklake;
-          ATTACH '/app/data/warehouse.duckdb' AS warehouse (READ_ONLY);
-          ATTACH 'ducklake:postgresql://ducklake:ducklake@ducklake-catalog:5432/ducklake'
-            AS lake (DATA_PATH '/app/data/lake/');
-          CALL start_ui({'listen': '0.0.0.0:4213'});\""
+    entrypoint:
+      - duckdb
+      - -cmd
+      - "INSTALL ui; LOAD ui; INSTALL postgres; LOAD postgres; INSTALL ducklake; LOAD ducklake; ATTACH '/app/data/warehouse.duckdb' AS warehouse (READ_ONLY); ATTACH 'ducklake:postgres:dbname=ducklake user=ducklake password=ducklake host=ducklake-catalog port=5432' AS lake (DATA_PATH '/app/data/lake/'); CALL start_ui();"
     healthcheck:
       test: ["CMD-SHELL", "wget --spider -q http://localhost:4213 || exit 1"]
       interval: 15s

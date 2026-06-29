@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from .registry import EspnLeague
 from .season import EspnSeason, select_season_windows
@@ -99,14 +99,15 @@ def discover_units(
             fetch_json, _seasons_url(core_base_url, league.slug), run_date=run_date
         )
         for season in select_season_windows(seasons, run_date, horizon_days):
+            unit_end = min(season.end_date, season.start_date + timedelta(days=365))
             unit = EspnUnit(
                 league_slug=league.slug,
                 league_name=league.name,
                 season_year=season.year,
                 start_date=season.start_date,
-                end_date=season.end_date,
+                end_date=unit_end,
                 scoreboard_url=_scoreboard_url(
-                    site_base_url, league.slug, season.start_date, season.end_date
+                    site_base_url, league.slug, season.start_date, unit_end
                 ),
             )
             units[(league.slug, season.year)] = unit
