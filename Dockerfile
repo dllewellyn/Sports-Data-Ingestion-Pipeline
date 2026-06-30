@@ -27,6 +27,6 @@ RUN uv sync --frozen
 # Application code (also bind-mounted in dev, baked in for prod).
 COPY . .
 
-RUN mkdir -p /app/.dagster /app/data/bronze /app/data/silver /app/data/gold
+RUN mkdir -p /app/.dagster /app/data/bronze /app/data/silver /app/data/silver/canonical /app/data/gold /app/data/exceptions /app/data/manual_links
 
 EXPOSE 3000 8888
