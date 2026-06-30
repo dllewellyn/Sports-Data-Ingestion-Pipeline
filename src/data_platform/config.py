@@ -54,6 +54,13 @@ class Settings(BaseSettings):
     )
     ducklake_data_path: Path = Path("data/lake")
 
+    # sports-gaming-engine PostgreSQL migration source
+    # Set to postgres://user:password@host:port/db to enable the one-off migration asset.
+    sports_gaming_engine_postgres_url: str = ""
+
+    # MCP
+    dbt_manifest_path: Path = Path("dbt/data_platform/target/manifest.json")
+
     # OpenTelemetry
     otel_service_name: str = "data-platform"
     otel_exporter_otlp_endpoint: str = "http://localhost:4317"

@@ -14,11 +14,13 @@ from dagster_dbt import DbtCliResource
 from .assets.bronze import raw_users
 from .assets.dbt import dbt_models, dbt_project
 from .assets.espn import espn_bronze
+from .assets.espn_postgres_migration import espn_postgres_migration
 from .assets.football_extra import football_extra
 from .assets.football_main import football_main
 from .assets.gold import publish_gold_parquet
 from .assets.matchbook_conform import matchbook_conform
 from .assets.matchbook_events import matchbook_events_bronze
+from .assets.matchbook_postgres_migration import matchbook_postgres_migration
 from .assets.matchbook_t60 import matchbook_t60_enrichment
 from .espn.http_client import ThrottledHttpClient as EspnThrottledHttpClient
 from .football.http_client import ThrottledHttpClient
@@ -55,6 +57,10 @@ espn_assets = AssetSelection.assets(
 # all()-based hello-world job. Run via dedicated `matchbook_events_ingestion` job.
 matchbook_events_assets = AssetSelection.assets(matchbook_events_bronze)
 
+# One-off migration assets: excluded from all scheduled jobs.
+matchbook_migration_assets = AssetSelection.assets(matchbook_postgres_migration)
+espn_migration_assets = AssetSelection.assets(espn_postgres_migration)
+
 # Matchbook conform layer (Spec 006): conform + T-60 enrichment + the dbt models they
 # feed. Excluded from medallion_hello_world — it is a heavy standalone pipeline that
 # depends on a full Matchbook events bronze lake (AC13).
@@ -74,6 +80,8 @@ medallion_job = define_asset_job(
         - espn_assets
         - matchbook_events_assets
         - matchbook_conform_assets
+        - matchbook_migration_assets
+        - espn_migration_assets
     ),
     description="End-to-end: ingest raw users -> dbt silver/gold (+tests) -> gold Parquet.",
 )
@@ -149,6 +157,8 @@ defs = Definitions(
         football_extra,
         espn_bronze,
         matchbook_events_bronze,
+        matchbook_postgres_migration,
+        espn_postgres_migration,
         matchbook_conform,
         matchbook_t60_enrichment,
     ],
