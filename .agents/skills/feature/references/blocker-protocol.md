@@ -17,7 +17,7 @@ Pause the run and ask the user when:
 
 Do **not** pause for:
 
-- Anything answerable from the user stories, investigation findings, `CLAUDE.md`, `ARCHITECTURE.md`, or an existing code pattern — read it and proceed, recording the assumption in the artifact.
+- Anything answerable from the feature description, investigation findings, the constitution, `CLAUDE.md`, `ARCHITECTURE.md`, or an existing code pattern — read it and proceed, recording the assumption in the artifact.
 - Naming, slug, file-number, ordering, or other mechanical choices with an obvious convention.
 - A review gap that's just *more work* (a missing test, an unhandled edge case the spec already names) — feed it back and re-delegate; that's the loop working, not a blocker.
 - An adherence `DEVIATED` result — re-delegate with the deviation called out; never accept it, but don't ask the user about it either.

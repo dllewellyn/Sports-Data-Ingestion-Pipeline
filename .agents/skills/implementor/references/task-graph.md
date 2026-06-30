@@ -1,23 +1,23 @@
-# Task graph & parallelisation
+# Footprint analysis & parallelisation
 
-Phase 1–2 of the implementor skill. Turn the plan's ordered steps into an executable, dependency-aware task graph, and decide — conservatively — what may run in parallel.
+Phase 1–2 of the implementor skill. The decomposition into a task list has already happened — `<feature_dir>/tasks.md` (produced by the `tasks` skill) is the dependency-ordered task graph. The implementor's job here is **footprint analysis** and the **conservative parallelisation decision**: for the `[P]`-marked tasks already in tasks.md, work out which are genuinely safe to run concurrently and which must stay serial.
 
 ## The principle
 
-The plan already did the hard decomposition: each `### Step S…` in `specs/NNN-<slug>-plan.md` carries a goal, spec trace, failing-first test, implementation outline, green criterion, guardrails, and a self-review checkpoint. The implementor's job is **not to re-plan** — it's to make that sequence executable: attach dependencies, footprints, and parallel groups, then drive it.
+The `tasks` skill already did the decomposition: `<feature_dir>/tasks.md` holds one task per line, each with its dependencies, its phase, a `[P]` marker where it judged the task file-disjoint, and a `[Sn]` reference back to the plan step it implements (the steps live in `<feature_dir>/plan.md`). The implementor's job is **not to re-decompose** — it's to validate and harden the parallel groups: confirm each `[P]` task's footprint really is disjoint and touches no shared serial resource before letting it run concurrently, and otherwise drive the graph in order.
 
-## Step 1 — One task per plan step (default)
+## Step 1 — Read the task list
 
-- **Default mapping: task = plan step.** A plan step is already the right unit — it's independently testable and independently committable. Keep the step's `S…` id as the task id so traceability is trivial.
-- **Split only when a step bundles independent units.** If a single step's §4 testable-units row actually lists two units that have their own tests and could fail independently, split into `S3a`/`S3b`. Splitting must preserve, not invent, traceability — each sub-task still points at the same spec scenario/AC.
-- **Never merge steps.** Merging breaks per-task atomic commits and lets two behaviours hide behind one review. If two steps feel redundant, that's plan feedback to surface — not something to collapse silently.
+- **The task list is `<feature_dir>/tasks.md`.** Each `- [ ] T### ...` line carries its task id, the phase it belongs to, its dependencies, a `[P]` marker where the `tasks` skill judged it parallel-safe, and a `[Sn]` reference to the plan step in `<feature_dir>/plan.md` it implements.
+- **Do not re-decompose.** Splitting the plan into tasks is the `tasks` skill's job, not the implementor's. If a task looks wrong (bundles two independent units, or duplicates another), that's feedback to surface — re-run `tasks` or raise it; don't silently re-cut the graph here.
+- **Trust the ids, verify the footprints.** Keep the `T###` ids and their `[Sn]` plan-step references as written; what this reference adds is the footprint check below before honouring any `[P]` marker.
 
-## Step 2 — Draw the dependency edges
+## Step 2 — Confirm the dependency edges
 
-For each task, list the tasks that must be `done` before it can start. Sources, in order:
+tasks.md already records each task's dependencies (in its `## Dependencies & Execution Order` section). Confirm they hold before dispatch. Sources to cross-check against, in order:
 
-1. **The plan's §7 sequencing & dependencies** — the authoritative order.
-2. **Setup-before-work** — S0/S1 setup tasks (pytest harness, pre-commit install, a `create-rule` convention commit) block every task that relies on them.
+1. **The plan's sequencing & dependencies section** in `<feature_dir>/plan.md` — the authoritative order.
+2. **Setup-before-work** — Setup-phase tasks (pytest harness, pre-commit install, a `create-rule` convention commit) block every task that relies on them.
 3. **Repo ordering gotchas** (from CLAUDE.md / ARCHITECTURE.md):
    - **bronze → silver → gold** — a silver model task depends on the bronze asset task; gold depends on silver.
    - **Derive Parquet inside dbt, then read the file in Python** — the Python-reads-file task depends on the dbt external-materialisation task (not on the warehouse table).
@@ -28,10 +28,10 @@ A task is **ready** when all its dependency tasks are `done`.
 
 ## Step 3 — Record each task's footprint
 
-For every task, note:
+For every task — especially every `[P]`-marked one — note:
 - **Files it will create/edit** (its write set).
 - **Shared serial resources it touches** — see the parallelisation rules below.
-- **Test facility** (pytest / Pydantic / Pandera / dbt test / artifact assertion) from the plan's §4.
+- **Test facility** (pytest / Pydantic / Pandera / dbt test / artifact assertion) from its `[Sn]` plan step's testable-units field in `<feature_dir>/plan.md`.
 
 ## Step 4 — The run checklist
 
@@ -39,16 +39,16 @@ Materialise the graph as the run's progress spine — a `TaskList` (preferred, s
 
 | Task | Plan step | Depends on | Parallel group | Footprint (write set) | Status |
 |------|-----------|------------|----------------|-----------------------|--------|
-| S0   | harness   | —          | —              | `pyproject.toml`, `tests/` | done |
-| S2   | stg model | S0         | —              | `dbt/.../silver/stg_x.sql` + tests | ready |
-| S3a  | parser    | S0         | P1             | `src/.../parse.py`, `tests/.../test_parse.py` | ready |
-| S3b  | mapper    | S0         | P1             | `src/.../map.py`, `tests/.../test_map.py` | ready |
+| T001 | S0 harness   | —       | —              | `pyproject.toml`, `tests/` | done |
+| T002 | S2 stg model | T001    | —              | `dbt/.../silver/stg_x.sql` + tests | ready |
+| T003 | S3 parser    | T001    | P1             | `src/.../parse.py`, `tests/.../test_parse.py` | ready |
+| T004 | S4 mapper    | T001    | P1             | `src/.../map.py`, `tests/.../test_map.py` | ready |
 
 This is also the **resume** record (see `execution-loop.md`): on restart, anything already committed is `done`.
 
 ## Parallelisation rules (conservative by design)
 
-Parallelism is an optimisation; correctness and clean review come first. A set of tasks may run concurrently **only if all** of these hold:
+Parallelism is an optimisation; correctness and clean review come first. The `tasks` skill marks file-disjoint tasks `[P]`, but that marker is a *candidate*, not a licence — confirm a set of `[P]` tasks may actually run concurrently by checking that **all** of these hold:
 
 1. **Disjoint write sets** — no two concurrent tasks edit the same file. (Concurrent edits to one file race even in separate worktrees once you merge.)
 2. **No shared serial resource** — none of them touches any of:

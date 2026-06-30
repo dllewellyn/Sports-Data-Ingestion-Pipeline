@@ -1,0 +1,128 @@
+{
+  "uid": "claude-code-overview",
+  "title": "Claude Code — Overview",
+  "tags": ["claude-code"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-24h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "model",
+        "label": "Model",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(claude_code_token_usage, model)",
+        "includeAll": true,
+        "multi": true,
+        "refresh": 2,
+        "current": { "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "user",
+        "label": "User",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(claude_code_token_usage, user_email)",
+        "includeAll": true,
+        "multi": true,
+        "refresh": 2,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Total cost (USD)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 2 } },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(claude_code_cost_usage{model=~\"$model\", user_email=~\"$user\"}[$__range]))" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Total tokens",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(claude_code_token_usage{model=~\"$model\", user_email=~\"$user\"}[$__range]))" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Sessions started",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(claude_code_session_count{user_email=~\"$user\"}[$__range]))" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Commits / PRs",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        { "refId": "A", "legendFormat": "commits", "expr": "sum(increase(claude_code_commit_count{user_email=~\"$user\"}[$__range]))" },
+        { "refId": "B", "legendFormat": "PRs", "expr": "sum(increase(claude_code_pull_request_count{user_email=~\"$user\"}[$__range]))" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Token usage rate by type",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10, "stacking": { "mode": "normal" } } } },
+      "targets": [
+        { "refId": "A", "legendFormat": "{{type}}", "expr": "sum by (type) (rate(claude_code_token_usage{model=~\"$model\", user_email=~\"$user\"}[$__rate_interval]))" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Cost by model (USD, cumulative over range)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "custom": { "fillOpacity": 10, "stacking": { "mode": "normal" } } } },
+      "targets": [
+        { "refId": "A", "legendFormat": "{{model}}", "expr": "sum by (model) (increase(claude_code_cost_usage{model=~\"$model\", user_email=~\"$user\"}[$__rate_interval]))" }
+      ]
+    },
+    {
+      "type": "barchart",
+      "title": "Lines of code (added / removed)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 12 },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        { "refId": "A", "legendFormat": "{{type}}", "expr": "sum by (type) (increase(claude_code_lines_of_code_count{user_email=~\"$user\"}[$__range]))" }
+      ]
+    },
+    {
+      "type": "piechart",
+      "title": "Code-edit tool decisions",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 12 },
+      "targets": [
+        { "refId": "A", "legendFormat": "{{decision}} ({{tool_name}})", "expr": "sum by (decision, tool_name) (increase(claude_code_code_edit_tool_decision{user_email=~\"$user\"}[$__range]))" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Active time (seconds)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 12 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10, "stacking": { "mode": "normal" } } } },
+      "targets": [
+        { "refId": "A", "legendFormat": "{{type}}", "expr": "sum by (type) (increase(claude_code_active_time_total{user_email=~\"$user\"}[$__rate_interval]))" }
+      ]
+    }
+  ]
+}

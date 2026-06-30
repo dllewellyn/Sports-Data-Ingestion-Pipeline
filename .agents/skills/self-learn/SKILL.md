@@ -11,7 +11,19 @@ The job of this skill is to **turn a finished piece of work into durable institu
 2. **An existing skill** — when the learning improves how a repeatable workflow we already have should run (a better step, a new guardrail, a corrected command).
 3. **A new skill** — when a repeatable, multi-step procedure emerged that nothing covers yet (e.g. "we just built a data-ingestion engine — capture the templates, scripts and best practices so the next ingestion is a skill invocation, not a from-scratch build").
 
+4. **The constitution** (`.specify/memory/constitution.md`) — when the learning is a durable,
+   project-wide *governing principle or constraint* that the whole spec → plan → tasks → implement
+   chain (and its gate tools) must enforce. This is the canonical governance source; the workflow
+   phases read it and check against it. Route here things like a new non-negotiable rule, a discovered
+   constraint-bypass that must be forbidden, a data-contract/medallion-layer rule, or a capability the
+   `feature` B2 gate should always provision. Bump the version line and keep dependent templates
+   (`spec-template.md`, `plan-template.md`, `tasks-template.md`) in sync (via `speckit-constitution`).
+
 This is reflection, not invention. **Proposing nothing is a valid, common outcome.** Most sessions produce one or two CLAUDE.md lines and no skill changes. Do not manufacture learnings to look productive — that is reward hacking and it pollutes the very files future instances depend on.
+
+**CLAUDE.md vs the constitution:** a project *fact / command / gotcha* loaded into every session's
+context → `CLAUDE.md`. A *governing principle the workflow must enforce and check against* (e.g. "no
+constraint-bypass without escalation") → the constitution.
 
 ## When to use
 
@@ -26,8 +38,12 @@ Do **not** use it for trivial sessions (a one-line fix, a question answered) —
 Always pull from all three before triaging. Each candidate learning must be **traceable to evidence** in one of them; cite it (a commit, a diff hunk, a moment in the conversation).
 
 1. **Conversation / session history.** What did we get wrong before getting it right? What surprised us? What did the user have to correct or explain? What "aha" unblocked us? These are the richest source of gotchas and conventions.
-2. **Git changes.** Run read-only git to see what actually changed (never push/checkout/reset — see global git rules):
-   - `git status` and `git diff` for uncommitted work, `git log --oneline -20` and `git diff <base>..HEAD` for committed work this session.
+2. **Git changes.** See what actually changed via the shared **read-only** helper
+   (it resolves the base/merge-base; never pushes/checks out/resets — see global git rules):
+   - `bash .agents/skills/_shared/git-helpers/bash/git-changeset.sh` — status, the session's
+     commit log, and both the uncommitted and committed diffs in one pass (`--stat` for a
+     compact view; `--base <ref>` to scope to this unit of work). PowerShell mirror under
+     `_shared/git-helpers/powershell/`.
    - New files/dirs often signal a *new capability* worth a skill; recurring edit patterns signal a *convention* worth CLAUDE.md.
 3. **Existing skills + CLAUDE.md.** Read `CLAUDE.md` (project + the "Maintaining this file" section) and list `.claude/skills/*/SKILL.md`. You cannot decide "new vs update vs already-covered" without knowing what already exists. **Prefer updating an existing skill or CLAUDE.md line over creating a duplicate.**
 
@@ -51,6 +67,7 @@ Drop anything that fails either test. (See `references/triage-rubric.md` for wor
 Use the decision rubric in [`references/triage-rubric.md`](references/triage-rubric.md). In short:
 
 - **→ CLAUDE.md** if it's a declarative fact/constraint/command/convention that applies across tasks. Put hard-won constraints under the existing **"Non-obvious constraints"** heading; keep additions concise and follow the file's own "Maintaining this file" guidance.
+- **→ The constitution** (`.specify/memory/constitution.md`) if it's a durable governing principle the whole workflow must enforce — add it as a principle (or under the relevant section), bump the version/last-amended line, and keep the dependent templates in sync.
 - **→ Update an existing skill** if it sharpens a workflow we already have. Identify the closest skill by its `description`/`USE WHEN`. Edit the relevant step or add a guardrail — don't bolt on unrelated scope.
 - **→ New skill** if a repeatable multi-step procedure with its own templates/scripts/best-practices emerged. Use [`references/new-skill-template.md`](references/new-skill-template.md) and follow the conventions in `.claude/skills/README.md` (one responsibility, `USE WHEN` description, `references/` for templates, parent-prefixed sub-skill names).
 
@@ -67,7 +84,18 @@ Show the user a compact table: each learning, its evidence, its destination, and
 
 ### 6. Commit (only if the user wants it)
 
-If the user asks to commit, use an atomic, Conventional-Commits commit (`docs:` for CLAUDE.md, `chore:`/`feat:` for skills). Per the project's "Maintaining this file" rule, CLAUDE.md learnings ideally land **in the same commit as the work that produced them** when that work is still uncommitted. Never `push`.
+If the user asks to commit, use the shared guarded helper so the footprint, the
+Conventional-Commits format, the co-author trailer, and the pre-commit gate are all
+enforced for you:
+
+```bash
+bash .agents/skills/_shared/git-helpers/bash/git-commit-safe.sh -m "docs: capture <learning>" CLAUDE.md .agents/skills/<skill>/SKILL.md
+```
+
+(`docs:` for CLAUDE.md, `chore:`/`feat:` for skills.) Per the project's "Maintaining
+this file" rule, CLAUDE.md learnings ideally land **in the same commit as the work that
+produced them** when that work is still uncommitted. The helper never `push`es and
+exposes none of the forbidden git verbs.
 
 ## Guardrails
 

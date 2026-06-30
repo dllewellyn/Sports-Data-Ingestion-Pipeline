@@ -8,19 +8,19 @@ spec, and how to group the leftovers into candidate specs.
 A Conventional Commit type (`feat`, `fix`, `style`, `chore`, …) is a **hint about
 intent, never the decision**. A `chore:` that adds a Docker service is substantive;
 a `feat:` that only renames a variable is not. Always confirm against
-`git show --stat <sha>` and, where the stat is ambiguous, the diff itself. What
-matters is: *did observable behaviour, a data contract, or a pipeline capability
-change?*
+`git-history.sh show <sha>` (its `--stat`) and, where the stat is ambiguous, the diff
+(`git-history.sh show <sha> --diff`). What matters is: *did observable behaviour, a
+data contract, or a pipeline capability change?*
 
 ## The three classes
 
 ### Covered
-An existing `specs/NNN-*-specification.md` already describes this change.
+An existing `specs/NNN-*/spec.md` already describes this change.
 
 - **Test:** the commit's behavioural effect maps onto that spec's summary,
   goals, a BDD capability/scenario, or an acceptance criterion — or onto a step in
-  its paired `-plan.md` (plans name concrete files/assets, which makes the match
-  precise).
+  its sibling `plan.md` in the same feature directory (plans name concrete
+  files/assets, which makes the match precise).
 - **Record:** `sha → spec id`, naming the matching capability as evidence.
 - Example in this repo: ESPN ingestion commits map to spec `002`; football-data
   bronze commits map to spec `001`.

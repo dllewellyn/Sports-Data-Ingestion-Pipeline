@@ -11,11 +11,16 @@ sources built before the spec discipline existed. This skill **closes that gap i
 reverse**: it reads the git history, finds the behaviour that shipped without a
 specification, and reconstructs the missing specs from the code that actually exists.
 
-The output is one or more new `specs/NNN-<slug>-specification.md` files —
-identical in format to forward specs (same template) but marked
-`status: implemented` and traced to the **commits** that delivered them rather than
-to user stories. At the end, every substantive change in the history is covered by
-a spec.
+The output is one or more new feature directories `specs/NNN-<slug>/spec.md` —
+identical in format to forward specs (same template) but with **Status: Implemented**
+and a **Source commits** metadata line tracing them to the commits that delivered
+them rather than to a forward description. At the end, every substantive change in the
+history is covered by a spec.
+
+Because this is a *batch backfill* of many historical features, it does **not** write
+`.specify/feature.json` — that pointer names the single *active* forward feature for the
+downstream chain, and a retrospective sweep has no single active feature. It only creates
+the spec directories.
 
 A good run is:
 - **Evidence-driven** — every "this commit is/ isn't covered" call cites the spec it
@@ -54,21 +59,51 @@ coverage map underneath it.
 
 Before classifying anything, know what already exists:
 
-1. **List the history.** `git log --oneline --reverse` (oldest → newest, so feature
-   arcs read in build order). Capture the full SHA list to iterate over.
-2. **Read every existing spec.** For each `specs/NNN-<slug>-specification.md`, extract
-   what it claims to cover: its summary, goals/non-goals, the capabilities in its BDD
-   section, and its acceptance criteria. If a paired `specs/NNN-<slug>-plan.md`
-   exists, skim it too — the plan often names the exact files/assets a spec touches,
-   which makes commit→spec matching precise.
-3. **Note the highest existing spec number.** New specs continue from there; increment
-   as you create them within this run so two new specs never collide on a number.
+1. **List the history.** Use the shared **read-only** helper, which emits the full
+   history oldest → newest as `<full_sha>\t<iso_date>\t<subject>` (so feature arcs
+   read in build order and you have stable SHAs to iterate over):
+
+   ```bash
+   bash .agents/skills/_shared/git-helpers/bash/git-history.sh list   # --since <ref> to limit the range
+   ```
+
+   (PowerShell: `pwsh .agents/skills/_shared/git-helpers/powershell/git-history.ps1 list`.)
+2. **Read every existing spec.** For each `specs/NNN-<slug>/spec.md`, extract what it
+   claims to cover: its summary, user scenarios, functional requirements, and success
+   criteria. If a sibling `plan.md` exists in the same feature directory, skim it too —
+   the plan often names the exact files/assets a spec touches, which makes commit→spec
+   matching precise.
+3. **Note the highest existing spec number.** New specs continue from there. Don't
+   eyeball it — `bash .agents/skills/_shared/spec-helpers/next-number.sh specs`
+   prints the next number, and `--count N` prints a collision-free block of `N`
+   consecutive numbers, which is exactly what you hand to the parallel writers in
+   Phase 4 so two new specs never collide.
 
 ### 2. Classify every commit, one at a time
 
-Walk the history oldest → newest. For **each** commit, look at what it actually
-changed (`git show --stat <sha>`, and the diff where the stat is ambiguous) and
-assign exactly one class. The full decision rubric — including how a Conventional
+First, **pre-filter the history by changed-path footprint** so you only spend
+judgement where it's needed. This is a deterministic pass, not a verdict:
+
+```bash
+bash .agents/skills/_shared/git-helpers/bash/classify-commits.sh   # --since <ref> to limit the range
+```
+
+It tags each commit `AUTO-NONSUBSTANTIVE` (every path is docs/skills/CI/meta — record
+and skip, no spec), `DEP` (only dependency manifests/locks — confirm no behavioural
+change), or `CANDIDATE` (touches code/data/schema/config — needs your call). It
+never decides *covered vs unspecified* — that still needs the diff. Use it to drop
+the `AUTO-NONSUBSTANTIVE` commits straight into the non-substantive ledger and
+concentrate on the `DEP`/`CANDIDATE` rows.
+
+Then walk the `DEP`/`CANDIDATE` commits oldest → newest. For **each**, look at what it
+actually changed and assign exactly one class. Inspect a commit with the shared
+helper — it prints the metadata, name-status, and `--stat`, plus the full patch with
+`--diff` where the stat is ambiguous:
+
+```bash
+bash .agents/skills/_shared/git-helpers/bash/git-history.sh show <sha>          # stat
+bash .agents/skills/_shared/git-helpers/bash/git-history.sh show <sha> --diff   # + full patch
+``` The full decision rubric — including how a Conventional
 Commit type is only a *hint*, never the decider — is in
 [`references/classification-rubric.md`](references/classification-rubric.md).
 
@@ -113,16 +148,24 @@ everything it needs up front. The sub-agent must:
 
 1. Read the cluster's commits in full (diffs) **and** the current state of the files
    they touch — the spec describes what the code does *now*.
-2. Write `specs/NNN-<slug>-specification.md` using the **exact** template at
+2. Create the feature directory `specs/NNN-<slug>/` and write its `spec.md` using the
+   **exact** template at
    [`.agents/skills/specification/references/specification-template.md`](../specification/references/specification-template.md)
-   — same frontmatter keys, same section order — with the retrospective adaptations
-   in [`references/retro-spec-guide.md`](references/retro-spec-guide.md) (status
-   `implemented`, traced to `source_commits` instead of user stories, background
-   states it was reconstructed, traceability maps commits → scenarios → ACs).
-3. Return its file path plus a list of any intent it could **not** recover from the
+   — same headings, same order — with the retrospective adaptations in
+   [`references/retro-spec-guide.md`](references/retro-spec-guide.md) (**Status:
+   Implemented**, a **Source commits** metadata line instead of a forward Input,
+   background states it was reconstructed). Do **not** write `.specify/feature.json`.
+3. Validate the written file structurally and fix anything flagged:
+   `python3 .agents/skills/_shared/spec-helpers/validate-spec.py specs/NNN-<slug>/spec.md`
+   — `Implemented` is an accepted status; it checks the mandatory sections, the
+   prioritised stories / BDD / FR / SC content, and Open Questions. A clean run is
+   template conformance, not accuracy — that's Phase 5's job.
+4. Return its file path plus a list of any intent it could **not** recover from the
    code (these become Open questions, not silent guesses).
 
-Assign each sub-agent its own pre-allocated `NNN` so parallel writers don't collide.
+Assign each sub-agent its own pre-allocated `NNN` so parallel writers don't collide —
+get the block in one shot with
+`bash .agents/skills/_shared/spec-helpers/next-number.sh specs --count <number-of-clusters>`.
 File-disjoint sub-agents (different spec files) can run in parallel.
 
 ### 5. Review each spec against the current codebase

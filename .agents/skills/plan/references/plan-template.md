@@ -1,73 +1,113 @@
 # Plan template
 
-This is the **exact output format**. Copy the skeleton into `specs/NNN-<slug>-plan.md` and fill every section. Keep the frontmatter keys and section order unchanged, and give **every step the same shape**. Remove the `<!-- guidance -->` comments from the final file; keep headings even when short (write "None." rather than deleting a section).
+This is the **exact output format** for `<feature_dir>/plan.md` (e.g. `specs/003-foo/plan.md`). Copy
+the skeleton, keep heading text and order unchanged, and give **every implementation step the same
+seven-field shape**. Remove `<!-- guidance -->` comments from the final file; keep headings even when
+short (write "None." rather than deleting a section).
 
-`NNN` and `slug` **must match the specification this plan implements** — the plan and spec are a pair (`specs/003-foo-specification.md` ↔ `specs/003-foo-plan.md`).
+The plan lives **inside the feature directory** alongside the spec — there is no separate `plans/`
+tree and no NNN-paired filename. The feature's identity is its directory (`.specify/feature.json`),
+not frontmatter. The Phase-0/1 design artifacts (`research.md`, `data-model.md`, `contracts/`,
+`quickstart.md`) are **sibling files**, referenced from *Project Structure*.
+
+The structural linter is `_shared/spec-helpers/validate-plan.py` and traceability closure is
+`_shared/spec-helpers/trace-check.py` — both key off the headings below.
 
 ---
 
 ```markdown
----
-id: NNN                          # SAME number as the specification this implements
-title: <Human-readable plan title>
-slug: <kebab-slug>               # SAME slug as the specification
-status: draft                    # draft | in-review | approved | in-progress | done
-created: YYYY-MM-DD
-specification: NNN-<slug>-specification.md   # the spec this plan implements
-user_stories: [1, 2]             # carried from the spec frontmatter
----
+# Implementation Plan: [FEATURE]
 
-# <Plan title>
+**Feature directory**: `specs/NNN-<slug>/`
+**Date**: YYYY-MM-DD
+**Spec**: `spec.md`
+**Status**: Draft   <!-- Draft | In-review | Approved | In-progress | Done -->
 
-## 1. Summary
-<!-- One paragraph: what we're building and the shape of the approach. No step detail yet. -->
+## Summary
+<!-- One paragraph: what we're building and the shape of the approach. The primary requirement from the spec + the technical approach from research. -->
 
-## 2. Skills to use
-<!-- From Phase 1. Which existing skills accelerate which part of the work, and any missing-skill gaps. -->
+## Technical Context
+<!-- The concrete technical decisions. Use NEEDS CLARIFICATION only for genuine unknowns to be resolved in research.md. -->
+
+**Language/Version**: [e.g. Python 3.12]
+**Primary Dependencies**: [e.g. Dagster, dbt, DuckDB, Pandera]
+**Storage**: [e.g. Parquet on local FS, DuckDB]
+**Testing**: [e.g. pytest, dbt tests, Pandera/Pydantic]
+**Target Platform**: [e.g. local CLI / scheduled job]
+**Project Type**: [single project | web | …]
+**Performance Goals**: [domain-specific or N/A]
+**Constraints**: [domain-specific bounds or N/A]
+**Scale/Scope**: [volume/scope]
+
+## Constitution Check
+<!-- GATE: must pass before Phase 0 research; RE-CHECK after Phase 1 design. List each relevant constitution principle and how this plan complies. Any violation goes in Complexity Tracking with a justification, or the plan changes. -->
+
+| Principle (constitution) | Compliance in this plan |
+|--------------------------|-------------------------|
+| II. No Reward Hacking | <how the plan avoids placeholders/mocks/gate-bypass> |
+| III. Test-First | <every step has a falsifiable test first> |
+
+## Project Structure
+<!-- The design artifacts produced this run, plus the concrete source layout this feature touches. -->
+
+```text
+specs/NNN-<slug>/
+├── spec.md
+├── plan.md           # this file
+├── research.md       # Phase 0 — decisions/rationale/alternatives for each unknown
+├── data-model.md     # Phase 1 — entities, fields, relationships, validation rules
+├── contracts/        # Phase 1 — interface/schema contracts (if any)
+├── quickstart.md     # Phase 1 — runnable validation scenarios
+└── tasks.md          # Phase 2 — produced later by the `tasks` skill, NOT here
+```
+
+**Source layout touched**: [real paths this feature adds/changes, e.g. `src/ingestion/…`, `models/silver/…`]
+
+## Skills to use
+<!-- Phase 1 skill discovery: which existing skills accelerate which work, and any missing-skill gaps. -->
 
 | Work area | Skill to use | Status |
 |-----------|--------------|--------|
 | <e.g. warehouse model + tests> | <skill name> | available |
 | <e.g. create data ingestion pipeline> | <skill name or "—"> | MISSING — propose creating before relying on it |
 
-## 3. Convention & rule audit (resolved before implementation)
-<!-- From Phase 2 — the HARD GATE. Every artifact type this plan touches, its governing convention, and the status. No step below may depend on a row still marked "gap". -->
+## Convention & rule audit (resolved before implementation)
+<!-- HARD GATE (Phase 2). Every artifact type this plan touches, its governing convention, and status. No step below may depend on a row still marked "gap". -->
 
 | Artifact type | Governing convention | Status |
 |---------------|----------------------|--------|
-| <e.g. new Python ingestion module> | <CLAUDE.md §… / a new rule> | exists / created this run / **gap — must close first** |
-| <e.g. pytest unit tests> | <test-harness convention> | <e.g. created this run: pytest harness + layout rule> |
+| <e.g. new Python ingestion module> | <constitution / CLAUDE.md / a new rule> | exists / created this run / **gap — must close first** |
+| <e.g. pytest unit tests> | <test-harness convention> | <e.g. created this run> |
 
-## 4. Testable units (BDD → tests)
-<!-- From Phase 3. Each spec scenario/AC → the unit(s) that satisfy it → the test facility and the failing-first assertion. -->
+## Testable units (BDD → tests)
+<!-- Phase 3. Each spec scenario/AC → the unit(s) that satisfy it → the test facility and the failing-first assertion. -->
 
-| Unit | Spec trace (scenario / AC) | Test facility | Failing-first assertion |
-|------|----------------------------|---------------|-------------------------|
-| <behaviour> | Scenario "…" / AC3 | pytest \| dbt test \| Pandera \| Pydantic \| artifact | <what must fail before, pass after> |
+| Unit | Spec trace (scenario / FR / SC) | Test facility | Failing-first assertion |
+|------|----------------------------------|---------------|-------------------------|
+| <behaviour> | Scenario "…" / FR-001 / SC-001 | pytest \| dbt test \| Pandera \| Pydantic \| artifact | <what must fail before, pass after> |
 
-## 5. Guardrail register
-<!-- From Phase 4. The gates protecting this change and how each is verified to be in place. A guardrail not yet in place becomes a setup step in §6 that runs before the work it guards. -->
+## Guardrail register
+<!-- Phase 4. The gates protecting this change and how each is verified in place. A guardrail not yet in place becomes a setup step in Implementation Steps that runs before the work it guards. -->
 
 | Guardrail | How verified in place | Covered by step |
 |-----------|------------------------|-----------------|
 | ruff check + format (pre-commit) | `uv run pre-commit run --all-files` clean | S0 |
 | dbt tests run via `dbt build` | <models + tests present> | S… |
-| Pydantic/Pandera boundary validation | <contract> | S… |
+| Boundary validation (Pydantic/Pandera) | <contract> | S… |
 | Idempotency / re-run safety | <how proven> | S… |
-| OTel span emitted | <where> | S… |
-| Repo non-obvious constraints respected | single-writer DuckDB · prefixed dbt asset keys · no `from __future__` in asset modules | all |
+| Constitution principles respected | II No-reward-hacking · III Test-first · I No-backward-compat | all |
 
-## 6. Implementation steps
-<!-- From Phase 5. Ordered, dependency-respecting. EVERY step uses the shape below. Setup steps (harness, conventions, guardrails) come first as S0, S1, … -->
+## Implementation Steps
+<!-- Phase 5. Ordered, dependency-respecting. EVERY step uses the shape below. Setup steps (harness, conventions, guardrails) come first as S0, S1, … -->
 
 ### Step S0 — <setup: e.g. establish pytest harness / install pre-commit>
 - **Goal:** <what this step achieves>
-- **Spec trace:** <scenario / AC, or "setup — enables steps S2–S4">
-- **Red (failing test first):** <the test to write and watch fail; for setup steps, the check that currently fails>
+- **Spec trace:** <scenario / FR / SC, or "setup — enables S2–S4">
+- **Red (failing test first):** <the test to write and watch fail>
 - **Implementation:** <minimum to make it pass>
-- **Green criterion:** <exact command(s) and the result that means done — e.g. `uv run pytest tests/test_x.py` passes; `dbt build --select …` green>
-- **Guardrails to satisfy:** <from §5, the ones this step must honour>
-- **Self-review checkpoint:** <what the review sub-agent will independently confirm — meets which scenario/AC, test genuinely fails-then-passes, conventions honoured, no reward-hacking. See references/self-review.md>
+- **Green criterion:** <exact command(s) and the result that means done>
+- **Guardrails to satisfy:** <from the guardrail register>
+- **Self-review checkpoint:** <what the independent review sub-agent will confirm — see references/self-review.md>
 
 ### Step S1 — <next>
 - **Goal:** …
@@ -80,19 +120,26 @@ user_stories: [1, 2]             # carried from the spec frontmatter
 
 <!-- repeat for every step -->
 
-## 7. Sequencing & dependencies
-<!-- The order and why. Call out edges driven by repo gotchas (bronze→silver→gold; derive Parquet inside dbt then read the file; prefixed dbt asset keys). A short list or diagram. -->
+## Sequencing & dependencies
+<!-- The order and why. Call out edges driven by repo gotchas. A short list or diagram. -->
 
-## 8. Assumptions
+## Complexity Tracking
+<!-- Fill ONLY if Constitution Check has violations that must be justified; otherwise write "None." -->
+
+| Violation | Why needed | Simpler alternative rejected because |
+|-----------|------------|--------------------------------------|
+| … | … | … |
+
+## Assumptions
 <!-- Everything taken as true to write this plan that wasn't confirmed. Visible so it can be challenged. -->
 
-## 9. Open questions
-<!-- Anything unresolved. Mark blockers. If empty, write "None." -->
+## Open Questions
+<!-- Anything unresolved. Label blockers **BLOCKER**. If empty, write "None." -->
 
-## 10. Traceability
-<!-- Prove coverage both ways: every spec scenario/AC is implemented by a step, and every step traces to the spec. -->
+## Traceability
+<!-- Prove coverage both ways: every spec scenario/FR/SC is implemented by a step, and every step traces to the spec. -->
 
-| Spec scenario / AC | Unit(s) | Step(s) | Guardrail(s) |
-|--------------------|---------|---------|--------------|
-| Scenario "…" / AC1 | <unit> | S2 | dbt test, ruff |
+| Spec scenario / FR / SC | Unit(s) | Step(s) | Guardrail(s) |
+|-------------------------|---------|---------|--------------|
+| Scenario "…" / FR-001 | <unit> | S2 | dbt test, ruff |
 ```

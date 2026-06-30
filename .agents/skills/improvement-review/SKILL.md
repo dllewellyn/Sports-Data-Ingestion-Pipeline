@@ -72,12 +72,16 @@ this build produced (since the paired plan/spec, or this branch vs the default
 branch). Evaluate the whole repo only when the user asks for a broad audit. State
 the scope you chose in the first line of the report.
 
+Gather it with the shared **read-only** helper — it resolves the default branch and
+merge-base and emits status + log + both diffs in one pass:
+
 ```bash
-git status --short
-git diff                       # uncommitted
-git log --oneline -20          # commits this build produced
-git diff main...HEAD           # branch vs default (read-only; never push/checkout/reset)
+bash .agents/skills/_shared/git-helpers/bash/git-changeset.sh
+# --stat for a compact overview first; --base <ref> to compare against the plan/spec point
 ```
+
+(PowerShell: `pwsh .agents/skills/_shared/git-helpers/powershell/git-changeset.ps1`.)
+It is strictly read-only — never pushes/checks out/resets.
 
 The changeset is the *subject*; the **whole codebase + its skills + its docs** are
 the *context* — reuse and ripple analysis both reach across the entire repo.
@@ -136,9 +140,10 @@ question — never silently omit it.
 2. Read the repo's contract + living-docs in full and keep them open: `CLAUDE.md`
    (*Non-obvious constraints*, *Python conventions*, *Do not overengineer*),
    `ARCHITECTURE.md` (layering, the data-flow diagram, §6), `ERD.md` (data model).
-3. If the build came from a spec/plan, read `specs/NNN-<slug>-{specification,plan}.md`
-   — the *intended* design tells you whether something is a deliberate choice or an
-   accidental shape worth flagging.
+3. If the build came from a feature, read `<feature_dir>/spec.md` and `<feature_dir>/plan.md`
+   (resolve `<feature_dir>` via `.specify/feature.json` /
+   `_shared/spec-helpers/feature-dir.sh`) — the *intended* design tells you whether
+   something is a deliberate choice or an accidental shape worth flagging.
 4. Inventory the skills (`.agents/skills/**`, `~/.claude`, plugins) and the doc map so
    the ripple analysis in Phase 3 knows what can be coupled.
 

@@ -11,7 +11,7 @@ Each task is delegated to its **own fresh agent** for two reasons: (1) it keeps 
 Hand the implementer **only its task's contract** — not the full plan, not licence to touch other steps:
 
 - Goal (the one behaviour this task delivers).
-- Spec trace — the BDD scenario / acceptance criterion from `specs/NNN-<slug>-specification.md` it must satisfy (quote it).
+- Spec trace — the scenario / FR / SC from `<feature_dir>/spec.md` it must satisfy (quote it).
 - The failing-first test to write (path + the assertion intent from the plan's §4).
 - Implementation outline (the plan's "minimum to pass").
 - Green criterion (exact commands + expected result).
@@ -28,14 +28,16 @@ If the task touches the network edge, warehouse, or asset wiring, include the sp
 
 ## Implementer prompt template
 
+**Telemetry:** immediately before spawning, run `python3 .agents/skills/_shared/telemetry/emit.py label-next --role implement:<task_id> --phase implementor` so this implementer appears as its own labelled span in the feature-run trace (best-effort no-op if telemetry is off).
+
 Spawn with a prompt of this shape (fill the `<…>`):
 
 > You are implementing **one task** from an approved plan. Build only this task — do not touch other plan steps, do not refactor unrelated code, do not add features the spec didn't ask for.
 >
 > **Task contract:**
 > - Goal: `<task goal>`
-> - Spec scenario / AC to satisfy (verbatim): `<…>` from `specs/NNN-<slug>-specification.md`
-> - Plan step: `S…` in `specs/NNN-<slug>-plan.md`
+> - Spec scenario / FR / SC to satisfy (verbatim): `<…>` from `<feature_dir>/spec.md`
+> - Plan step: the task's `[Sn]` step in `<feature_dir>/plan.md`
 > - Failing-first test to write: `<path>` — assertion: `<what must fail before, pass after>`
 > - Implementation outline: `<minimum to pass>`
 > - Green criterion: `<exact command(s) + expected result>`

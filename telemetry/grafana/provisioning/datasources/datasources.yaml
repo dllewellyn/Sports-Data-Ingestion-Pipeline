@@ -1,0 +1,42 @@
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      httpMethod: POST
+      timeInterval: 15s
+
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      maxLines: 5000
+
+  - name: Tempo
+    uid: tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      # Node-graph view of a single run's span tree (feature -> stages -> sub-agents).
+      nodeGraph:
+        enabled: true
+      # Click any span -> jump to THAT sub-agent's activity in Loki. The span carries
+      # feature.run_id + agent_id; service_name is the Loki stream selector, run_id and
+      # agent_id are structured-metadata filters (see _shared/telemetry/emit.py + the
+      # SubagentStop hook's transcript ingestion).
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: '-10m'
+        spanEndTimeShift: '10m'
+        filterByTraceID: false
+        filterBySpanID: false
+        customQuery: true
+        query: '{service_name="feature-orchestrator"} | run_id=`${__span.tags["feature.run_id"]}` | agent_id=`${__span.tags["agent_id"]}`'

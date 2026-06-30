@@ -40,11 +40,17 @@ Default to the **pending changes** (uncommitted + this branch vs the default
 branch). Review the whole repo only when the user asks for a full audit or when
 there is no diff. State the scope you chose in the first line of the report.
 
+Gather the change set with the shared **read-only** helper — it resolves the
+default branch and merge-base for you (don't hardcode `main`):
+
 ```bash
-git status --short
-git diff                       # uncommitted
-git diff main...HEAD           # branch changes (read-only; never push/checkout/reset)
+bash .agents/skills/_shared/git-helpers/bash/git-changeset.sh
+# add --stat for a compact view on a large diff; --base <ref> to override the base
 ```
+
+(PowerShell: `pwsh .agents/skills/_shared/git-helpers/powershell/git-changeset.ps1`.)
+The helper is strictly read-only — it never pushes/checks out/resets. For a full-repo
+audit, skip it and review the tree directly.
 
 ## The rules to check (from ARCHITECTURE.md §3–§4)
 
@@ -91,8 +97,21 @@ Determine diff vs full-repo (above). Read `ARCHITECTURE.md` in full so you revie
 against the live contract, not your memory of it.
 
 ### 2. Gather evidence
-For each in-scope module, check the rules above. Prefer precise searches over
-guesswork, e.g.:
+Start with the deterministic linter — it encodes the mechanically-checkable rules
+(1, 3, 4, 5, 7) as an AST scan, so you get a precise violation list instead of
+re-typing greps and eyeballing them:
+
+```bash
+python3 .agents/skills/_shared/arch-helpers/arch-lint.py
+# --src / --edge / --config to override the defaults (src/data_platform, assets/bronze.py, config.py)
+```
+
+It prints `path:line: [Rule N] …` for every hit and exits non-zero if any are found.
+**Rules 2, 6 and 8 are not — and cannot be — checked by the linter** (validate-in-
+order, transformation-belongs-in-dbt, ARCHITECTURE.md staleness all need reading and
+judgement); those stay your job, on every review. The grep recipes below remain a
+useful manual cross-check or a starting point if the source layout differs from the
+linter's defaults:
 
 ```bash
 # Rule 1 — network use outside bronze
@@ -104,9 +123,9 @@ grep -rnE "duckdb\.connect|warehouse\.duckdb" src/data_platform
 # Rule 7 — ad-hoc env reads
 grep -rnE "os\.getenv|os\.environ" src/data_platform | grep -v config.py
 ```
-Searches are signals, not verdicts: open each hit and confirm it is a real
-violation in context before reporting it. A grep match inside a comment, a
-docstring, or `config.py` itself is not a finding.
+Linter hits and grep matches are **signals, not verdicts**: open each and confirm it
+is a real violation in context before reporting it. A match inside a comment, a
+docstring, a `:memory:` duckdb read, or `config.py` itself is not a finding.
 
 ### 3. Triage findings
 For every confirmed finding record: the rule (by number/name), the evidence

@@ -15,7 +15,7 @@ Once per step, after **red→green** completes and the step's guardrails are loc
 1. **Meets the spec.** The step's behaviour actually satisfies the BDD scenario / acceptance criterion it claims (from the plan's §6 *Spec trace* and §10 traceability). Observable outcome, not mechanism.
 2. **The test is real.** The test genuinely exercises the behaviour and *can fail* — confirm it fails when the implementation is reverted/broken, or by inspection that the assertion is non-trivial. A test that passes against no/empty implementation is a fail.
 3. **Conventions honoured.** The code follows the governing convention from the Phase-2 audit (CLAUDE.md Python conventions, ruff clean, `pydantic-settings` for config, `pathlib.Path`, no `from __future__ import annotations` in asset modules, prefixed dbt asset keys, single-writer DuckDB rule, etc.).
-4. **No reward-hacking** — the core check. Flag any of: placeholders, mocks, hardcoded values, or stub implementations outside test contexts; defaults-on-failure / silent fallbacks where the spec demands a raise; suppressed, skipped, or weakened quality gates or tests (`--no-verify`, `--skip`, blanket `# noqa`, `xfail`/`skip` added to dodge a failure, permissive variants of a gate); a test narrowed to make red go green.
+4. **No reward-hacking** — the core check. Flag any of: placeholders, mocks, hardcoded values, or stub implementations outside test contexts; defaults-on-failure / silent fallbacks where the spec demands a raise; suppressed, skipped, or weakened quality gates or tests (`--no-verify`, `--skip`, blanket `# noqa`, a new ruff ignore entry, `xfail`/`skip` added to dodge a failure, permissive variants of a gate, softened pre-commit/hooks); a test narrowed to make red go green; files pushed that shouldn't be. **Any constraint-bypass is an automatic REWARD-HACKING verdict** — it must be escalated to the caller (`feature`'s blocker protocol, or the user), never approved by the reviewer or "fixed" by the implementer doing the bypass.
 5. **No backward-compatibility scaffolding.** Legacy paths the step was meant to replace are removed, not left serving a second purpose.
 6. **Guardrails in place.** The guardrails the step claimed (§5/§6) are actually satisfied (ruff/pre-commit clean, dbt tests present and green, validation at the boundary).
 
@@ -27,7 +27,7 @@ Spawn the sub-agent with a prompt of this shape (fill the `<…>`):
 >
 > **The step's contract:**
 > - Goal: `<step goal>`
-> - Spec trace: scenario `<…>` / acceptance criterion `<…>` from `specs/NNN-<slug>-specification.md`
+> - Spec trace: scenario `<…>` / FR / SC from `<feature_dir>/spec.md`
 > - Claimed failing-first test: `<test path/name>`
 > - Claimed green criterion: `<command + expected result>`
 > - Guardrails it must satisfy: `<list>`

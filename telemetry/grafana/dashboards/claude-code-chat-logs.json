@@ -1,0 +1,97 @@
+{
+  "uid": "claude-code-chat-logs",
+  "title": "Claude Code — Chat & Activity Logs",
+  "tags": ["claude-code", "logs"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "search",
+        "label": "Search text",
+        "type": "textbox",
+        "current": { "text": "", "value": "" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Prompts (range)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "options": { "reduceOptions": { "calcs": ["sum"] } },
+      "targets": [
+        { "refId": "A", "queryType": "range", "expr": "sum(count_over_time({service_name=\"claude-code\"} | event_name=`user_prompt` [$__interval]))" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Tool calls (range)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "options": { "reduceOptions": { "calcs": ["sum"] } },
+      "targets": [
+        { "refId": "A", "queryType": "range", "expr": "sum(count_over_time({service_name=\"claude-code\"} | event_name=`tool_result` [$__interval]))" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "API errors (range)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] } } },
+      "options": { "reduceOptions": { "calcs": ["sum"] }, "colorMode": "background" },
+      "targets": [
+        { "refId": "A", "queryType": "range", "expr": "sum(count_over_time({service_name=\"claude-code\"} | event_name=`api_error` [$__interval]))" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "API refusals (range)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 1 } ] } } },
+      "options": { "reduceOptions": { "calcs": ["sum"] }, "colorMode": "background" },
+      "targets": [
+        { "refId": "A", "queryType": "range", "expr": "sum(count_over_time({service_name=\"claude-code\"} | event_name=`api_refusal` [$__interval]))" }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "User prompts",
+      "description": "Requires OTEL_LOG_USER_PROMPTS=1 for prompt text; otherwise prompt is <REDACTED>.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 11, "w": 12, "x": 0, "y": 4 },
+      "options": { "showTime": true, "wrapLogMessage": true, "prettifyLogMessage": false, "dedupStrategy": "none", "enableLogDetails": true, "sortOrder": "Descending" },
+      "targets": [
+        { "refId": "A", "queryType": "range", "expr": "{service_name=\"claude-code\"} | event_name=`user_prompt` |~ `(?i)$search`" }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "Tool calls & results",
+      "description": "Tool name, success and (with OTEL_LOG_TOOL_DETAILS=1) parameters such as Bash commands and file paths.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 11, "w": 12, "x": 12, "y": 4 },
+      "options": { "showTime": true, "wrapLogMessage": true, "prettifyLogMessage": false, "dedupStrategy": "none", "enableLogDetails": true, "sortOrder": "Descending" },
+      "targets": [
+        { "refId": "A", "queryType": "range", "expr": "{service_name=\"claude-code\"} | event_name=`tool_result` |~ `(?i)$search`" }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "All Claude Code events (raw stream)",
+      "description": "Every emitted event. Expand a line to see all attributes (event_name, prompt.id, model, session.id, user.email, ...).",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 13, "w": 24, "x": 0, "y": 15 },
+      "options": { "showTime": true, "wrapLogMessage": true, "prettifyLogMessage": true, "dedupStrategy": "none", "enableLogDetails": true, "sortOrder": "Descending" },
+      "targets": [
+        { "refId": "A", "queryType": "range", "expr": "{service_name=\"claude-code\"} |~ `(?i)$search`" }
+      ]
+    }
+  ]
+}

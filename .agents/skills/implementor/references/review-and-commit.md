@@ -22,6 +22,8 @@ The implementor adds, explicitly:
 
 ## Reviewer prompt (delta over the base template)
 
+**Telemetry:** immediately before spawning, run `python3 .agents/skills/_shared/telemetry/emit.py label-next --role review:<task_id> --phase implementor` so the independent review shows up as its own span in the feature-run trace — this is what proves, in the dashboard, that the review sub-agent actually ran for each task (best-effort no-op if telemetry is off).
+
 Spawn with the base prompt from `self-review.md`, then append:
 
 > **Additionally, decide:**
@@ -43,16 +45,34 @@ Spawn with the base prompt from `self-review.md`, then append:
 
 ## Commit protocol (PASS only)
 
-One atomic commit per passing task — the known-good, resumable checkpoint:
+One atomic commit per passing task — the known-good, resumable checkpoint. **Make the
+commit through the shared guarded helper**, which encodes every rule below structurally
+so the commit can't be made wrong:
 
-- **Atomic & scoped:** stage only the task's footprint (`git add <those paths>`); don't sweep unrelated working-tree changes into the commit.
-- **Conventional Commits:** `feat|fix|refactor|build|ci|chore|docs|style|perf|test(scope): …`, message tracing to the plan step (e.g. `feat(football): extra-family bronze ingestor (plan S3)`).
-- **Let the gate run:** pre-commit (ruff) executes on commit. **Never** `--no-verify` / `--skip`. If the hook fails, the task wasn't actually green — fix and re-review; do not bypass.
-- **Forbidden git** (per the user's rules): never `git push`; never `git checkout` / `git switch`; never `git reset --hard` / `git clean` / `git restore` / `rm`; no repo-wide search/replace scripts (`sed -i`, `perl -pi`). Use the repo's package manager (`uv`) — no tooling swaps.
-- **Branch:** if on the default branch (`main`) and the user expects a feature branch, raise it before the first commit — but do **not** `git checkout`/`switch` yourself (it's forbidden); ask the user to create/switch the branch, or commit on the current branch if that's what they want.
-
-Co-author trailer on commits, per the harness git convention:
-
+```bash
+bash .agents/skills/_shared/git-helpers/bash/git-commit-safe.sh \
+  -m "feat(football): extra-family bronze ingestor (plan S3)" \
+  src/data_platform/assets/football.py tests/test_football.py
 ```
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
-```
+
+(PowerShell: `pwsh .agents/skills/_shared/git-helpers/powershell/git-commit-safe.ps1 …`.)
+
+The helper, by construction:
+
+- **Stages only the task's footprint** — pass exactly the task's files as the path
+  args; it refuses if anything is staged *outside* them (no sweeping unrelated work in).
+- **Enforces Conventional Commits** — `feat|fix|refactor|build|ci|chore|docs|style|perf|test(scope): …`,
+  with the message tracing to the plan step. It rejects a non-conventional subject.
+- **Lets the gate run** — pre-commit (ruff) executes; the helper **never** passes
+  `--no-verify`/`--skip`. If a hook fails the commit fails (non-zero) and the task
+  isn't green — fix and re-review; never bypass.
+- **Appends the co-author trailer** automatically:
+  `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
+- **Exposes none of the forbidden verbs** — it can only `add` + `commit`. It never
+  pushes / checks out / switches / `reset --hard` / `clean` / `restore` / `rm`.
+- **Refuses the default branch** unless you pass `--allow-default-branch`: if on `main`
+  and the user expects a feature branch, raise it first — the helper never switches
+  branches (forbidden); ask the user to create/switch, or pass the flag to commit here.
+
+Use the repo's package manager (`uv`) — no tooling swaps; no repo-wide search/replace
+scripts (`sed -i`, `perl -pi`).

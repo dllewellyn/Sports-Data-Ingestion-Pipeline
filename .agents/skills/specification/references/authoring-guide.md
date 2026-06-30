@@ -1,81 +1,90 @@
 # Specification authoring guide
 
-How to interview for, write, and number a specification. The output format lives in `specification-template.md`; this file is the *how-to-write-it-well*.
+How to write and locate a specification well. The output format lives in
+`specification-template.md`; this file is the *how-to-write-it-well*.
 
-## Numbering & naming
+## Numbering, naming & threading
 
-- Filename: `specs/NNN-<slug>-specification.md`.
-- `NNN` is a zero-padded, monotonically increasing integer. To find the next one: list `specs/`, take the highest leading `NNN` across existing `*-specification.md` files, add one, zero-pad to three digits. The first spec is `001`. Never reuse a number, even if a spec is deleted.
-- `<slug>` is kebab-case, derived from the **outcome**, not a verbatim story title (e.g. `football-main-bronze-ingestion`, not `implement-football-main-bronze-ingestion-and-validation-path`). Keep it short and stable.
-- `id` and `slug` in the frontmatter must match the filename.
-- If `specs/` does not exist yet, create it.
+- **Directory:** `specs/NNN-<slug>/`, containing `spec.md` and `checklists/requirements.md` (and,
+  after planning, `plan.md`, `tasks.md`, `research.md`, `data-model.md`, `contracts/`, `quickstart.md`).
+- **`NNN`** is a zero-padded, monotonically increasing integer. Find the next one with
+  `bash .agents/skills/_shared/spec-helpers/next-number.sh specs` (scans existing `specs/NNN-*/`
+  directories). The first feature is `001`. Never reuse a number, even if a feature is deleted.
+- **`<slug>`** is kebab-case, derived from the **outcome** (a 2–4 word short name), not a verbatim
+  description (e.g. `football-main-bronze-ingestion`, not
+  `implement-football-main-bronze-ingestion-and-validation-path`). Keep it short and stable.
+- **Threading:** the specification skill writes `{ "feature_directory": "specs/NNN-<slug>" }` to
+  `.specify/feature.json`. This — not a git branch, not a filename convention — is how `plan`,
+  `tasks`, `implementor`, and the `speckit-*` gate tools find the feature. Keep it accurate.
 
-## Linking user stories
+## Input: free-text, with optional investigation findings
 
-The frontmatter `user_stories` list links the spec back to its sources. Use the identifier that uniquely names each story **in this repo's backlog**:
+There is no user-story backlog to link. The input is the user's free-text feature description.
+Where an upstream **investigation** ran, read `investigations/<slug>/findings.md` and fold its
+answer / recommended direction / constraints / rejected options into the spec rather than
+re-deriving them; note unresolved investigation questions under *Open Questions*.
 
-- Stories live in `user_stories/` as Azure DevOps work-item JSON. A synced story has a numeric work-item `id` (and is usually saved as `<id>.json`, e.g. `1.json`, `2.json`) — use that number: `user_stories: [1, 2]`.
-- A not-yet-synced story is saved under a slug filename (e.g. `new-implement-football-main-bronze-ingestion-and-validation-path.json`) with `"localStatus": "new"` and no numeric id — use the filename stem as its identifier until it gets a number.
-- The template shows the generic `US-001` form; in this repo prefer the real identifiers above so the link resolves. Be consistent within a spec.
+## Guess, don't interrogate
 
-Always read each story before linking it (`System.Title`, `System.Description`, `Microsoft.VSTS.Common.AcceptanceCriteria`, `relations`). The `relations` array (e.g. `Hierarchy-Reverse` → parent epic, dependency links) tells you the story's place in the backlog — note parent epics and dependencies in *Background & context* and *Constraints*.
+Make informed guesses from context and industry standards, and **document each as an assumption**.
+Only emit `[NEEDS CLARIFICATION: specific question]` when a choice genuinely cannot be defaulted and
+it materially affects scope/security/UX. **Hard cap: 3 markers total.** Prioritise
+*scope > security/privacy > user experience > technical detail*. Promote anything that blocks build
+to *Open Questions* as a **BLOCKER**.
 
-## Interview question bank
+**Reasonable defaults you should NOT ask about:** data retention (domain-standard), performance
+targets (standard expectations unless stated), error handling (user-friendly messages with
+fallbacks), integration patterns (project-appropriate). Record the default you chose in *Assumptions*.
 
-Ask only what the stories and inputs leave genuinely unclear. Prefer `AskUserQuestion` with concrete options over open prompts. Batch related questions.
+## Writing prioritised user stories
 
-**Outcome & scope**
-- What observable result means this is done — what can the user/system do afterwards that it couldn't before?
-- What is explicitly *out* of scope for this spec?
-- Is this one outcome, or several that should be separate specs?
+- Each story is an **independently testable** journey: implementing just P1 should still deliver a
+  viable, demonstrable slice of value.
+- Assign priorities (P1 most critical). Order by importance.
+- For each story give *Why this priority*, an *Independent Test* (how to test the slice alone and what
+  value it proves), and BDD acceptance scenarios.
 
-**Actors & triggers**
-- Who or what starts this (user role, scheduled run, upstream event)?
-- How often / under what conditions does it fire?
+## Writing good BDD acceptance scenarios
 
-**Behaviour & rules**
-- Walk the happy path step by step — what's the expected end state?
-- What business rules cause the behaviour to vary (thresholds, categories, per-record policy)?
-- Are there ordering, concurrency, or dependency constraints?
+- One scenario = one behaviour. **Given** sets context, **When** is the single trigger, **Then** is
+  the observable outcome (`And` for extra outcomes).
+- Write outcomes you can **observe and assert** — "a bronze Parquet file is written under
+  `football_main/` partitioning" beats "the data is processed".
+- Cover the happy path first, then each rule-driven variation and failure mode.
+- Avoid implementation mechanism in *Then* ("the row is inserted via dbt" → "the row appears in the
+  silver model and passes its dbt tests").
 
-**Edge cases & failure**
-- What inputs are invalid/malformed/empty, and what should happen to them — reject, quarantine, skip-and-continue, fail the run?
-- What happens on partial failure or a re-run of the same input (idempotency)?
-- Encoding, schema drift, missing fields, limits exceeded, upstream unavailable — expected behaviour for each?
+## Writing good functional requirements & success criteria
 
-**Acceptance & non-functional**
-- What evidence proves it works (a passing test, a produced artifact, a metric)?
-- Volume / latency / throughput expectations?
-- Data contracts: required fields, types, formats, partitioning, layer (bronze/silver/gold)?
-
-## Writing good BDD scenarios
-
-- One scenario = one behaviour. Keep **Given/When/Then** crisp: Given sets context, When is the single trigger, Then is the observable outcome (and `And` for extra outcomes).
-- Write outcomes you can **observe and assert** — "a bronze Parquet file is written under `football_main/` partitioning" beats "the data is processed".
-- Cover the happy path first, then each rule-driven variation and each failure mode as its own scenario.
-- Avoid implementation detail in Then ("the row is inserted via dbt" → instead "the row appears in the silver model and passes its dbt tests"). Name observable results, not mechanisms.
-- Group scenarios under the capability they belong to so the spec reads top-down.
-
-## Writing good acceptance criteria
-
-- Each AC is a single, objectively pass/fail statement. If two people could disagree on whether it passed, split or sharpen it.
-- Prefer the Given/When/Then phrasing the source stories already use where it fits — it keeps traceability obvious.
-- Every source story's acceptance criteria must be represented by at least one AC and/or scenario here. The traceability table is where you prove it.
-- ACs are the build's definition of done — they should be the things a reviewer literally checks off.
+- **FR-NNN**: a single testable `MUST` statement. If two people could disagree on whether it passed,
+  split or sharpen it.
+- **SC-NNN** (success criteria) must be **measurable** (metric, count, rate, time), **technology-
+  agnostic** (no framework/language/DB/tool), **user/business-focused**, and **verifiable** without
+  knowing the implementation.
+  - Good: "all valid rows from a source file land in the silver model and pass its tests";
+    "95% of searches return results in under 1 second".
+  - Bad: "API response under 200ms"; "Redis cache hit rate above 80%" (implementation-specific).
 
 ## Writing good edge cases & constraints
 
-- Edge cases describe **expected behaviour under adverse conditions**, not just the risk. "Malformed row → surfaced per policy, valid rows continue" — state the policy.
-- Constraints capture what an implementer must not violate: dependencies on other specs/stories, non-functional bounds, data contracts, and repo-specific gotchas. For this codebase, check `CLAUDE.md` → *Non-obvious constraints* and `ARCHITECTURE.md`, and carry forward anything relevant (e.g. DuckDB single-writer, dbt asset-key prefixing, no `from __future__ import annotations` in asset modules) rather than letting the spec contradict them.
+- Edge cases describe **expected behaviour under adverse conditions**, not just the risk: "malformed
+  row → surfaced per policy, valid rows continue" — state the policy.
+- Constraints capture what an implementer must not violate. Pull relevant principles from
+  `.specify/memory/constitution.md` (the canonical governance source) and any project `CLAUDE.md` /
+  `ARCHITECTURE.md` that exist — non-functional bounds, data contracts, layer constraints, repo
+  gotchas — and never write the spec to contradict them. Reference the governing principle.
 
 ## Quality bar (self-check before finishing)
 
-- [ ] Every source story is linked in frontmatter and appears in the traceability table.
-- [ ] Every story acceptance criterion maps to a scenario or an AC.
-- [ ] Every spec requirement traces back to a story or an explicitly agreed addition.
-- [ ] Happy path, rule variations, and failure modes all have scenarios.
+- [ ] `.specify/feature.json` points at the new `specs/NNN-<slug>/`.
+- [ ] `validate-spec.py` passes on `spec.md`.
+- [ ] Every mandatory section is present and filled (Open Questions says "None." if empty).
+- [ ] Stories are prioritised and each is independently testable.
+- [ ] Happy path, rule variations, and failure modes all have scenarios with observable outcomes.
 - [ ] Edge cases state expected behaviour, not just risks.
-- [ ] Acceptance criteria are each objectively pass/fail.
-- [ ] No silent assumptions — they're in *Assumptions*; unresolved items are in *Open questions* (blockers flagged).
+- [ ] Functional requirements are each objectively testable; success criteria are measurable and tech-agnostic.
+- [ ] At most 3 `[NEEDS CLARIFICATION]` markers; build-blockers promoted to *Open Questions* as **BLOCKER**.
+- [ ] No silent assumptions — chosen defaults are in *Assumptions*.
 - [ ] The spec stays at outcome altitude except where domain vocabulary is the requirement.
-- [ ] Contradictions between stories / with investigation findings are surfaced, not buried.
+- [ ] No constitution principle is contradicted; contradictions are surfaced.
+- [ ] `checklists/requirements.md` generated and validated; feature synced into `docs/`.

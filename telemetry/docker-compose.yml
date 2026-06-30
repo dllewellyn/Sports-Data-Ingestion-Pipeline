@@ -1,0 +1,95 @@
+name: claude-telemetry
+
+# OpenTelemetry stack for Claude Code.
+#
+#   Claude Code --OTLP--> otel-collector --+--> prometheus (metrics)
+#                                           +--> loki       (logs/events)
+#                                                            \--> grafana (dashboards)
+#
+# Bring it up:   docker compose up -d
+# Point Claude:  source ./claude-otel.env  (then run `claude` in the same shell)
+# Grafana:       http://localhost:3000  (admin / admin)
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.116.1
+    container_name: claude-otel-collector
+    restart: unless-stopped
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./otel-collector/config.yaml:/etc/otel/config.yaml:ro
+    ports:
+      # Host 14317/14318 to avoid clashing with an existing OTLP stack (e.g. SigNoz) on 4317/4318.
+      - "14317:4317"  # OTLP gRPC  (point Claude Code here)
+      - "14318:4318"  # OTLP HTTP
+      # 18889/18888 on the host (container stays 8889/8888) to dodge the SigNoz collector.
+      # Prometheus scrapes these over the Docker network using the container ports, so the
+      # host mapping is only for manual curl/inspection.
+      - "18889:8889"  # Prometheus scrape endpoint (exported metrics)
+      - "18888:8888"  # Collector's own internal metrics
+    depends_on:
+      - loki
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: claude-prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+
+  loki:
+    image: grafana/loki:3.3.2
+    container_name: claude-loki
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/config.yaml"]
+    volumes:
+      - ./loki/loki-config.yaml:/etc/loki/config.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "3100:3100"
+
+  # Trace store for the feature-run span tree (and Claude Code's beta traces).
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: claude-tempo
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "3200:3200"  # Tempo query API (Grafana datasource + manual curl)
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: claude-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_DEFAULT_THEME: dark
+      # Loki Explore / log context works best with these on:
+      GF_FEATURE_TOGGLES_ENABLE: ""
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+
+volumes:
+  prometheus-data:
+  loki-data:
+  grafana-data:
+  tempo-data:
