@@ -32,7 +32,7 @@ RUNNER_MATCH_THRESHOLD = 0.70
 # 1X2 market type — Matchbook sends this as "match_odds" but accept common variants
 # case-insensitively in case the string differs across API versions or ingestor versions.
 MARKET_TYPE_1X2_VARIANTS: frozenset[str] = frozenset(
-    {"match_odds", "1x2", "match_result", "win_draw_win"}
+    {"match_odds", "1x2", "match_result", "win_draw_win", "one_x_two"}
 )
 
 
