@@ -269,6 +269,9 @@ run via pre-commit) — don't hand-format; let `ruff format` decide. Lint set is
   them into your change set. Scope ruff to your own files; the pre-commit hook
   already runs on staged files only. Note `pre-commit run --all-files` is the full
   repo gate — keep it green (it surfaces *any* file's lint debt, not just yours).
+- **`pre-commit run --all-files` currently fails on a pre-existing `SIM105` in `investigations/duckdb-data-catalogue-mcp/code/server.py:120`** (`try/except/pass` instead of `contextlib.suppress`). This is not a regression from recent spec work. When landing a feature, verify your changes don't introduce *new* SIM findings; if all-files still fails after your changes are clean, the break is pre-existing debt and can be fixed in a follow-up lint sprint.
+- **Enrichment Parquet files may write join-key columns as INT32/INT64 even when the canonical target is VARCHAR.** The T-60 enrichment asset writes `favourite_team_id` as INT32 (pandas default for numeric-looking hex strings stored as integers), but `team.team_id` is VARCHAR in DuckLake. Any gold LEFT JOIN on an enrichment-sourced ID column must use `cast(... as varchar)` explicitly — the join silently errors without it. Discovered and fixed in spec 008 commit `16802b6`.
+- **Gold layer convention: two-file pattern (table + export).** Each gold analytics model follows the `dim_users_by_city.sql` + `users_by_city_export.sql` template: one SQL file for the logic (inherits `+materialized: table` from `dbt_project.yml`), one `<model>_export.sql` wrapping it with `materialized='external'` to write `$DATA_DIR/gold/<model>.parquet`. Notebooks read the exported Parquet file; they never connect to the DuckLake catalog.
 
 ## Maintaining this file
 
