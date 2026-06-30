@@ -340,7 +340,15 @@ def run_t60_enrichment(
             else:
                 raw_event_dict = raw_event or {}
 
+            # Runners may be at top level (some API formats) or nested inside
+            # the one_x_two market (live ingest format from Matchbook API).
             runners = raw_event_dict.get("runners", [])
+            if not runners:
+                for market in raw_event_dict.get("markets", []):
+                    if market.get("market-type", "").lower() in MARKET_TYPE_1X2_VARIANTS:
+                        runners = market.get("runners", [])
+                        # Normalise runner dicts: live format uses "id"/"name", same as expected
+                        break
             home_team_name = str(match_data.get("home_team_name", ""))
             away_team_name = str(match_data.get("away_team_name", ""))
 
