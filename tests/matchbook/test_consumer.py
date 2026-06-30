@@ -172,23 +172,28 @@ def test_flush_bad_schema_writes_nothing(tmp_path: Path) -> None:
 
 def test_sigterm_flushes_buffer(tmp_path: Path) -> None:
     """Buffer is flushed when SIGTERM causes run() to exit cleanly (AC-16)."""
+    from unittest.mock import patch
+
     mock_pubsub = MagicMock()
     mock_pubsub.get_message.return_value = None
     mock_redis = MagicMock()
     mock_redis.pubsub.return_value = mock_pubsub
 
-    consumer = DirectParquetConsumer(bronze_dir=tmp_path)
-    consumer._redis = mock_redis
+    with patch("redis.Redis") as mock_redis_cls:
+        mock_redis_cls.return_value = mock_redis
+        consumer = DirectParquetConsumer(bronze_dir=tmp_path)
+        consumer._redis = mock_redis
+        consumer._redis_proto = mock_redis
 
-    # Pre-load buffer with 3 distinct ticks (different event_ids → no dedup)
-    consumer._buffer.clear()
-    consumer._buffer.append(_valid_tick_dict(event_id=1))
-    consumer._buffer.append(_valid_tick_dict(event_id=2))
-    consumer._buffer.append(_valid_tick_dict(event_id=3))
+        # Pre-load buffer with 3 distinct ticks (different event_ids → no dedup)
+        consumer._buffer.clear()
+        consumer._buffer.append(_valid_tick_dict(event_id=1))
+        consumer._buffer.append(_valid_tick_dict(event_id=2))
+        consumer._buffer.append(_valid_tick_dict(event_id=3))
 
-    # Simulate SIGTERM: set _running=False so run() exits immediately
-    consumer._running = False
-    consumer.run()
+        # Simulate SIGTERM: set _running=False so run() exits immediately
+        consumer._running = False
+        consumer.run()
 
     parquet_files = list(tmp_path.rglob("*.parquet"))
     assert len(parquet_files) == 1

@@ -164,14 +164,20 @@ def _row_from_cache(row: dict, *, ingested_at: str) -> dict | None:
         "status": {"type": {"name": row.get("status") or ""}},
         "date": kickoff_str,
         "competitors": [
-            {"homeAway": "home", "team": {
-                "id": row.get("home_team_id") or "",
-                "displayName": row.get("home_team_name") or "",
-            }},
-            {"homeAway": "away", "team": {
-                "id": row.get("away_team_id") or "",
-                "displayName": row.get("away_team_name") or "",
-            }},
+            {
+                "homeAway": "home",
+                "team": {
+                    "id": row.get("home_team_id") or "",
+                    "displayName": row.get("home_team_name") or "",
+                },
+            },
+            {
+                "homeAway": "away",
+                "team": {
+                    "id": row.get("away_team_id") or "",
+                    "displayName": row.get("away_team_name") or "",
+                },
+            },
         ],
         "_migration_source": "postgres",
         "_migration_table": "bronze.provider_match_cache",
@@ -274,8 +280,11 @@ def run_espn_postgres_migration(
             if not event_rows:
                 report.skipped.append(
                     UnitResult(
-                        league_slug, season_year, "skipped",
-                        total_rows=len(group_rows), failed_rows=failed,
+                        league_slug,
+                        season_year,
+                        "skipped",
+                        total_rows=len(group_rows),
+                        failed_rows=failed,
                     )
                 )
                 continue
@@ -292,12 +301,16 @@ def run_espn_postgres_migration(
             if log:
                 log.info(
                     "espn migration: wrote %d rows → %s (skipped %d)",
-                    len(df), out_path, failed,
+                    len(df),
+                    out_path,
+                    failed,
                 )
 
             report.written.append(
                 UnitResult(
-                    league_slug, season_year, "written",
+                    league_slug,
+                    season_year,
+                    "written",
                     out_path=out_path,
                     total_rows=len(group_rows),
                     valid_rows=len(event_rows),
@@ -307,12 +320,8 @@ def run_espn_postgres_migration(
 
         except Exception as exc:  # noqa: BLE001
             if log:
-                log.error(
-                    "espn migration: failed for %s/%s: %s", league_slug, season_year, exc
-                )
-            report.failed.append(
-                UnitResult(league_slug, season_year, "failed", error=str(exc))
-            )
+                log.error("espn migration: failed for %s/%s: %s", league_slug, season_year, exc)
+            report.failed.append(UnitResult(league_slug, season_year, "failed", error=str(exc)))
 
     return report
 

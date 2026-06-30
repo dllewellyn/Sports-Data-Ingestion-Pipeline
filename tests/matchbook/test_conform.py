@@ -18,7 +18,7 @@ from data_platform.matchbook.conform import (
 
 def test_parse_event_name_normal() -> None:
     """U1: parse 'Arsenal v Chelsea' -> ('Arsenal', 'Chelsea')."""
-    assert parse_event_name("Arsenal v Chelsea") == ("Arsenal", "Chelsea")
+    assert parse_event_name("Arsenal vs Chelsea") == ("Arsenal", "Chelsea")
 
 
 # ── U2: missing separator ───────────────────────────────────────────────────
@@ -31,7 +31,7 @@ def test_parse_event_name_no_separator() -> None:
 
 def test_parse_event_name_wrong_separator() -> None:
     """Different separators don't match."""
-    assert parse_event_name("Team A vs Team B") is None
+    assert parse_event_name("Team A v Team B") is None
 
 
 # ── U3: first ' v ' split only ──────────────────────────────────────────────
@@ -39,9 +39,9 @@ def test_parse_event_name_wrong_separator() -> None:
 
 def test_parse_event_name_multiple_v() -> None:
     """U3: 'Real Madrid v FC v Barcelona' splits on first ' v '."""
-    assert parse_event_name("Real Madrid v FC v Barcelona") == (
+    assert parse_event_name("Real Madrid vs FC vs Barcelona") == (
         "Real Madrid",
-        "FC v Barcelona",
+        "FC vs Barcelona",
     )
 
 
@@ -183,7 +183,7 @@ def test_override_routes_before_fuzzy(tmp_path: Path) -> None:
     events = [
         {
             "event_id": "100",
-            "event_name": "Arsenal v Chelsea",
+            "event_name": "Arsenal vs Chelsea",
             "start_utc": "2026-08-10T15:00:00Z",
             "sport_id": 15,
             "ingested_at": 1,
@@ -218,7 +218,7 @@ def test_high_confidence_auto_link(tmp_path: Path) -> None:
     events = [
         {
             "event_id": "200",
-            "event_name": "Arsenal v Chelsea",
+            "event_name": "Arsenal vs Chelsea",
             "start_utc": "2026-08-10T15:00:00Z",
             "sport_id": 15,
             "ingested_at": 1,
@@ -254,7 +254,7 @@ def test_high_blocked_by_kickoff_diff(tmp_path: Path) -> None:
     events = [
         {
             "event_id": "300",
-            "event_name": "Arsenal v Chelsea",
+            "event_name": "Arsenal vs Chelsea",
             "start_utc": "2026-08-10T15:00:00Z",
             "sport_id": 15,
             "ingested_at": 1,
@@ -288,13 +288,13 @@ def test_medium_confidence_unique(tmp_path: Path) -> None:
     """U9: MEDIUM confidence = 0.75 exact, needs_review, fuzzy_medium.
 
     Uses names that score in [0.70, 0.85) with token_sort_ratio:
-    "Arsenal FC v Chelsea FC" parsed as home="Arsenal FC", away="Chelsea FC"
+    "Arsenal FC vs Chelsea FC" parsed as home="Arsenal FC", away="Chelsea FC"
     vs canonical "Arsenal" (~0.80) and "Chelsea" (~0.80).
     """
     events = [
         {
             "event_id": "400",
-            "event_name": "Arsenal FC v Chelsea FC",
+            "event_name": "Arsenal FC vs Chelsea FC",
             "start_utc": "2026-08-10T15:00:00Z",
             "sport_id": 15,
             "ingested_at": 1,
@@ -333,7 +333,7 @@ def test_multiple_medium_candidates_to_exceptions(tmp_path: Path) -> None:
     events = [
         {
             "event_id": "500",
-            "event_name": "Arsenal v Chelsea",
+            "event_name": "Arsenal vs Chelsea",
             "start_utc": "2026-08-10T15:00:00Z",
             "sport_id": 15,
             "ingested_at": 1,
@@ -376,7 +376,7 @@ def test_no_match_exceptions_with_candidates(tmp_path: Path) -> None:
     events = [
         {
             "event_id": "600",
-            "event_name": "Unknown FC v Mystery United",
+            "event_name": "Unknown FC vs Mystery United",
             "start_utc": "2026-08-10T15:00:00Z",
             "sport_id": 15,
             "ingested_at": 1,
@@ -430,7 +430,7 @@ def test_idempotency_identical_output(tmp_path: Path) -> None:
     events = [
         {
             "event_id": "800",
-            "event_name": "Arsenal v Chelsea",
+            "event_name": "Arsenal vs Chelsea",
             "start_utc": "2026-08-10T15:00:00Z",
             "sport_id": 15,
             "ingested_at": 1,
@@ -537,7 +537,7 @@ def test_invalid_start_utc_to_exceptions(tmp_path: Path) -> None:
     events = [
         {
             "event_id": "1000",
-            "event_name": "Arsenal v Chelsea",
+            "event_name": "Arsenal vs Chelsea",
             "start_utc": "not-a-date",
             "sport_id": 15,
             "ingested_at": 1,
@@ -557,7 +557,7 @@ def test_dedup_by_latest_ingested_at(tmp_path: Path) -> None:
     events = [
         {
             "event_id": "1100",
-            "event_name": "Arsenal v Chelsea",
+            "event_name": "Arsenal vs Chelsea",
             "start_utc": "2026-08-10T15:00:00Z",
             "sport_id": 15,
             "ingested_at": 1,

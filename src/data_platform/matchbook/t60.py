@@ -205,6 +205,7 @@ def run_t60_enrichment(
     events_df = pd.DataFrame()
     if event_files:
         events_df = pd.concat([pd.read_parquet(f) for f in event_files], ignore_index=True)
+
         # Prefer live-ingest rows (which have 'markets' in raw_event and therefore
         # runner data) over migration rows — migration rows set ingested_at to the
         # migration timestamp so they otherwise win the recency-based dedup.
