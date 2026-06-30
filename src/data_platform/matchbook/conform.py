@@ -101,9 +101,13 @@ def _write_parquet_atomic(df: pd.DataFrame, path: Path) -> None:
 
 
 def _parse_start_utc(value: str) -> datetime | None:
-    """Parse a start_utc string to a datetime. Returns None on failure."""
+    """Parse a start_utc string to a naive UTC datetime. Returns None on failure."""
     try:
-        return pd.Timestamp(value).to_pydatetime()
+        ts = pd.Timestamp(value)
+        # Normalize to UTC and strip tzinfo so arithmetic with naive kickoff_time works.
+        if ts.tzinfo is not None:
+            ts = ts.tz_convert("UTC").tz_localize(None)
+        return ts.to_pydatetime()
     except Exception:
         return None
 
@@ -126,7 +130,10 @@ def _score_candidate(
     if kickoff_time is None or pd.isna(kickoff_time):
         return None
 
-    kickoff_dt = pd.Timestamp(kickoff_time).to_pydatetime()
+    kickoff_ts = pd.Timestamp(kickoff_time)
+    if kickoff_ts.tzinfo is not None:
+        kickoff_ts = kickoff_ts.tz_convert("UTC").tz_localize(None)
+    kickoff_dt = kickoff_ts.to_pydatetime()
     diff_minutes = abs((start_utc - kickoff_dt).total_seconds()) / 60.0
 
     home_score = token_sort_ratio(home_parsed, canon_home) / 100.0
