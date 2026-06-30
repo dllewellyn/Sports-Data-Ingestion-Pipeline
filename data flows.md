@@ -97,20 +97,40 @@ Reads the resolved links and the odds bronze lake. Finds the best-back price per
 
 ---
 
-## How scores and odds come together
+## Gold layer — analytics-ready views
 
-The data is linked but there is **no gold model yet** projecting a unified analytics view. To build one, join:
+### `completed_matches` (dbt gold table + Parquet export)
+
+One row per finished fixture. Filters `match` to rows where `ft_score IS NOT NULL`
+and joins in all human-readable context:
+
+| Column | Source |
+|---|---|
+| `match_id` | canonical surrogate |
+| `kickoff_time` | UTC timestamp |
+| `league` | `league.name` (league slug, e.g. `eng.1`) |
+| `season` | `season.name` (display name, e.g. `2024-25`) |
+| `home_team` / `away_team` | `team.name` |
+| `ft_score` | `match.ft_score` (e.g. `2-1`) |
+| `favourite_team` | `team.name` for the pre-match Matchbook favourite (NULL when no odds data) |
+
+Written to `data/gold/completed_matches.parquet` by `completed_matches_export` (dbt external materialization).
+
+**Notebook:** `notebooks/completed_matches.ipynb` — query the Parquet directly with DuckDB; cells for all matches, per-league breakdown, league filter, and matches with a Matchbook favourite.
+
+## How raw odds and scores come together (future gold)
+
+The completed_matches gold table does not yet expose raw pre-match odds ticks.
+To build a deeper analytics view, join:
 
 ```
-match (match_id, kickoff_time, ft_score, favourite_team_id)
+completed_matches (match_id, ft_score, favourite_team)
   ↑ match_id
 matchbook_event_link (matchbook_event_id → match_id)
   ↑ matchbook_event_id = event_id
 stg_matchbook_odds (market_id, runner_id, best_back_price, ingested_at, kickoff_ms)
   filter: ingested_at < kickoff_time  -- pre-match only
 ```
-
-A gold model doing this join is the natural next step.
 
 ---
 
