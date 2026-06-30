@@ -80,7 +80,7 @@ canonical_additions as (
         cast(null as varchar) as ht_score,
         cast(null as varchar) as ft_score,
         false                 as status_completed
-    from try_read_parquet(
+    from read_parquet(
         '{{ env_var("DATA_DIR", "/app/data") }}/silver/matchbook_canonical_additions.parquet'
     )
 ),
@@ -95,7 +95,7 @@ combined as (
 -- try_read_parquet returns zero rows when file absent (E11 — favourite_team_id stays NULL).
 t60_enrichment as (
     select match_id, favourite_team_id
-    from try_read_parquet(
+    from read_parquet(
         '{{ env_var("DATA_DIR", "/app/data") }}/silver/matchbook_t60_enrichment.parquet'
     )
 )

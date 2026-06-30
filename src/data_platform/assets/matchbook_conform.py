@@ -4,11 +4,23 @@ Thin asset that calls run_conform() and emits MaterializeResult with metadata.
 No ``from __future__ import annotations`` — Dagster introspects the annotations.
 """
 
+import pandas as pd
 from dagster import AssetKey, MaterializeResult, asset
 
 from ..config import settings
 from ..matchbook.conform import run_conform
 from ..otel import get_tracer
+
+
+def _ensure_empty_parquet(path, columns: list[str]) -> None:
+    """Write an empty Parquet file with the given columns if the file doesn't exist."""
+    if path.exists():
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df = pd.DataFrame(columns=columns)
+    tmp = path.with_suffix(".tmp")
+    df.to_parquet(tmp, index=False)
+    tmp.rename(path)
 
 
 @asset(
@@ -27,6 +39,17 @@ from ..otel import get_tracer
 )
 def matchbook_conform(context) -> MaterializeResult:
     """Run the Matchbook conform engine and write silver-layer Parquet outputs."""
+    # Bootstrap: ensure both Parquet files that match.sql reads via read_parquet() exist
+    # before the dbt silver models run (even if conform/t60 have not produced real data yet).
+    _ensure_empty_parquet(
+        settings.matchbook_canonical_additions_dir / "matchbook_canonical_additions.parquet",
+        columns=["match_id", "season_id", "home_team_id", "away_team_id", "kickoff_time"],
+    )
+    _ensure_empty_parquet(
+        settings.matchbook_t60_dir / "matchbook_t60_enrichment.parquet",
+        columns=["match_id", "favourite_team_id"],
+    )
+
     tracer = get_tracer()
     with tracer.start_as_current_span("matchbook_conform"):
         report = run_conform(

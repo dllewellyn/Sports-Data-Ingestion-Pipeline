@@ -423,10 +423,16 @@ def run_conform(
     _write_parquet_atomic(exceptions_df, exceptions_dir / "matchbook_unresolved.parquet")
     report.exceptions_count = len(exceptions_df)
 
-    if addition_rows:
-        additions_df = pd.DataFrame(addition_rows)
-        _write_parquet_atomic(additions_df, additions_dir / "matchbook_canonical_additions.parquet")
-        report.additions_count = len(additions_df)
+    # Always write, even if empty — read_parquet in match.sql requires the file to exist.
+    additions_df = (
+        pd.DataFrame(addition_rows)
+        if addition_rows
+        else pd.DataFrame(
+            columns=["match_id", "season_id", "home_team_id", "away_team_id", "kickoff_time"]
+        )
+    )
+    _write_parquet_atomic(additions_df, additions_dir / "matchbook_canonical_additions.parquet")
+    report.additions_count = len(additions_df)
 
     log.info(
         "conform: resolved=%d, exceptions=%d, overrides=%d, additions=%d",
