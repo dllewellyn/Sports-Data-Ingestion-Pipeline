@@ -41,7 +41,7 @@ join {{ ref('season') }}         s    on s.season_id  = m.season_id
 join {{ ref('league') }}         l    on l.league_id  = s.league_id
 join {{ ref('team') }}           home on home.team_id = m.home_team_id
 join {{ ref('team') }}           away on away.team_id = m.away_team_id
-left join t60                         on t60.match_id = m.match_id
-left join {{ ref('team') }}      fav  on fav.team_id  = cast(t60.favourite_team_id as varchar)
+join t60                              on t60.match_id = m.match_id
+join {{ ref('team') }}           fav  on fav.team_id  = cast(t60.favourite_team_id as varchar)
 where m.ft_score is not null
 order by m.kickoff_time desc
