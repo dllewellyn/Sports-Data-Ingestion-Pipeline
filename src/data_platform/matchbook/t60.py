@@ -48,7 +48,7 @@ def filter_t60_ticks(ticks_df: pd.DataFrame, kickoff_ms: float) -> pd.DataFrame:
     """Filter ticks to the T-60 window [kickoff_ms - 4500000, kickoff_ms - 2700000].
 
     Ticks with NULL ingested_at are excluded. ingested_at may be integer epoch-ms
-    (test fixtures) or datetime64 (production Parquet) — normalise to int ms.
+    (test fixtures) or datetime64[ms, UTC] (production Parquet) — normalise to int ms.
     """
     if ticks_df.empty:
         return ticks_df
@@ -58,7 +58,11 @@ def filter_t60_ticks(ticks_df: pd.DataFrame, kickoff_ms: float) -> pd.DataFrame:
 
     ingested_ms = ticks_df["ingested_at"]
     if pd.api.types.is_datetime64_any_dtype(ingested_ms):
-        ingested_ms = ingested_ms.astype("int64") // 1_000_000
+        # Remove timezone if present (production Parquet uses datetime64[ms, UTC])
+        if hasattr(ingested_ms.dtype, "tz") and ingested_ms.dtype.tz is not None:
+            ingested_ms = ingested_ms.dt.tz_convert("UTC").dt.tz_localize(None)
+        # Normalise to epoch-milliseconds regardless of original unit (ns, ms, us, s)
+        ingested_ms = ingested_ms.astype("datetime64[ms]").astype("int64")
 
     mask = ingested_ms.notna() & (ingested_ms >= window_start) & (ingested_ms <= window_end)
     return ticks_df[mask].copy()

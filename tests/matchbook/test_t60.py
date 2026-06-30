@@ -60,6 +60,38 @@ def test_filter_t60_ticks_empty_df() -> None:
     assert result.empty
 
 
+def test_filter_t60_ticks_datetime64_ms_utc() -> None:
+    """Production Parquet stores ingested_at as datetime64[ms, UTC] — must normalise correctly."""
+    import datetime
+
+    kickoff_ms = 1_000_000_000_000  # epoch-ms
+    window_start_ms = kickoff_ms - 4_500_000
+    window_end_ms = kickoff_ms - 2_700_000
+
+    # Build timestamps as datetime64[ms, UTC] (production dtype)
+    def ms_to_ts(ms: int) -> pd.Timestamp:
+        return pd.Timestamp(ms * 1_000_000, unit="ns", tz="UTC")
+
+    ticks = pd.DataFrame(
+        {
+            "ingested_at": pd.array(
+                [
+                    ms_to_ts(window_start_ms),  # included
+                    ms_to_ts(window_end_ms),  # included
+                    ms_to_ts(window_start_ms - 1),  # excluded
+                    ms_to_ts(window_end_ms + 1),  # excluded
+                ],
+                dtype="datetime64[ms, UTC]",
+            ),
+            "runner_id": ["r1", "r2", "r3", "r4"],
+            "best_back_price": [2.0, 2.1, 1.9, 2.2],
+        }
+    )
+
+    result = filter_t60_ticks(ticks, kickoff_ms)
+    assert set(result["runner_id"]) == {"r1", "r2"}
+
+
 # ── U20: Find favourite runner ───────────────────────────────────────────────
 
 
