@@ -43,3 +43,4 @@ seeds:
 tests:
   data_platform:
     +database: lake
+
