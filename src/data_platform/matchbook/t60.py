@@ -205,7 +205,21 @@ def run_t60_enrichment(
     events_df = pd.DataFrame()
     if event_files:
         events_df = pd.concat([pd.read_parquet(f) for f in event_files], ignore_index=True)
-        if "ingested_at" in events_df.columns:
+        # Prefer live-ingest rows (which have 'markets' in raw_event and therefore
+        # runner data) over migration rows — migration rows set ingested_at to the
+        # migration timestamp so they otherwise win the recency-based dedup.
+        def _has_markets(raw: object) -> bool:
+            if isinstance(raw, str):
+                return '"markets"' in raw
+            return isinstance(raw, dict) and "markets" in raw
+
+        if "raw_event" in events_df.columns:
+            events_df["_has_markets"] = events_df["raw_event"].map(_has_markets)
+            events_df = events_df.sort_values(
+                ["_has_markets", "ingested_at"], ascending=[False, False]
+            )
+            events_df = events_df.drop("_has_markets", axis=1)
+        elif "ingested_at" in events_df.columns:
             events_df = events_df.sort_values("ingested_at", ascending=False)
         events_df = events_df.drop_duplicates(subset=["event_id"], keep="first")
 
