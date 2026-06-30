@@ -208,10 +208,29 @@ def run_t60_enrichment(
     if not events_df.empty:
         events_by_id = {str(row["event_id"]): row.to_dict() for _, row in events_df.iterrows()}
 
-    # ── Load odds Parquet ───────────────────────────────────────────────
-    odds_files = sorted(odds_dir.glob("**/*.parquet")) if odds_dir.exists() else []
-    if not odds_files:
-        log.warning("No odds Parquet files found in %s", odds_dir)
+    # ── Detect odds layout and build a date-based file loader ──────────────
+    # Production: partitioned as year=YYYY/month=MM/day=DD/part-*.parquet —
+    # load only the two day-partitions spanning the T-60 window to avoid OOM.
+    # Tests / flat layout: fall back to all Parquet files directly in odds_dir.
+    _is_partitioned = any(odds_dir.glob("year=*")) if odds_dir.exists() else False
+
+    def _odds_files_for_date(dt: pd.Timestamp) -> list[Path]:
+        if not _is_partitioned:
+            return []
+        day_dir = odds_dir / f"year={dt.year}" / f"month={dt.month:02d}" / f"day={dt.day:02d}"
+        return sorted(day_dir.glob("*.parquet")) if day_dir.exists() else []
+
+    _flat_odds_files: list[Path] = (
+        sorted(odds_dir.glob("**/*.parquet")) if not _is_partitioned and odds_dir.exists() else []
+    )
+    _flat_odds_df: pd.DataFrame | None = (
+        pd.concat([pd.read_parquet(f) for f in _flat_odds_files], ignore_index=True)
+        if _flat_odds_files
+        else None
+    )
+
+    if not odds_dir.exists():
+        log.warning("No odds directory found at %s", odds_dir)
         _write_parquet_atomic(
             pd.DataFrame(
                 columns=[
@@ -228,8 +247,6 @@ def run_t60_enrichment(
             out_path,
         )
         return report
-
-    odds_df = pd.concat([pd.read_parquet(f) for f in odds_files], ignore_index=True)
 
     # ── Process each linked event ────────────────────────────────────────
     enrichment_rows: list[dict] = []
@@ -249,14 +266,32 @@ def run_t60_enrichment(
             report.skipped_no_ticks += 1
             continue
 
-        kickoff_ms = pd.Timestamp(kickoff_time).value // 1_000_000  # ns -> ms
+        kickoff_ts = pd.Timestamp(kickoff_time)
+        kickoff_ms = kickoff_ts.value // 1_000_000  # ns -> ms
+
+        # Load only the odds files from the day of (and day before) kickoff —
+        # the T-60 window spans up to 75 min before kickoff, which may cross midnight.
+        # Falls back to the pre-loaded flat DataFrame for non-partitioned layouts (tests).
+        if _is_partitioned:
+            day_files = _odds_files_for_date(kickoff_ts)
+            prev_files = _odds_files_for_date(kickoff_ts - pd.Timedelta(days=1))
+            relevant_files = prev_files + day_files
+            if not relevant_files:
+                report.skipped_no_ticks += 1
+                continue
+            day_odds = pd.concat([pd.read_parquet(f) for f in relevant_files], ignore_index=True)
+        elif _flat_odds_df is not None:
+            day_odds = _flat_odds_df
+        else:
+            report.skipped_no_ticks += 1
+            continue
 
         # Filter odds to the 1X2 (match odds) market for this event.
         # Accept common variants case-insensitively in case the ingestor
         # passes through a different string from Matchbook's API.
-        event_odds = odds_df[
-            (odds_df["event_id"].astype(str) == event_id)
-            & odds_df["market_type"].str.lower().isin(MARKET_TYPE_1X2_VARIANTS)
+        event_odds = day_odds[
+            (day_odds["event_id"].astype(str) == event_id)
+            & day_odds["market_type"].str.lower().isin(MARKET_TYPE_1X2_VARIANTS)
         ]
 
         if event_odds.empty:
