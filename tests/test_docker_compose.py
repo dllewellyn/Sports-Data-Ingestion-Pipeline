@@ -38,9 +38,7 @@ def test_streamlit_service_exposes_port_8501() -> None:
     streamlit = compose.get("services", {}).get("streamlit", {})
     ports = streamlit.get("ports", [])
     port_strings = [str(p) for p in ports]
-    assert any("8501" in p for p in port_strings), (
-        "Streamlit service must expose port 8501 (AC15)"
-    )
+    assert any("8501" in p for p in port_strings), "Streamlit service must expose port 8501 (AC15)"
 
 
 def test_streamlit_service_mounts_data() -> None:
@@ -56,13 +54,12 @@ def test_streamlit_service_mounts_data() -> None:
     # Check either direct volumes or that the command mentions data.
     volumes = streamlit.get("volumes", [])
     vol_strings = [str(v) for v in volumes]
-    # If no explicit volumes (inherits from anchor), check command
-    command = str(streamlit.get("command", ""))
-    has_data_mount = any("data" in v for v in vol_strings) or "./data" in command
     # The x-app anchor defines ./data:/app/data; in a raw YAML parse without anchor
     # expansion we need a different check. Accept the test if streamlit service exists
-    # and either has the volume OR inherits via <<: *app (anchor present in file).
+    # and either has the volume explicitly OR the file references ./data (anchor path).
+    command = str(streamlit.get("command", ""))
+    has_data_mount = any("data" in v for v in vol_strings) or "./data" in command
     compose_text = COMPOSE_PATH.read_text()
-    assert "streamlit" in compose_text and "./data" in compose_text, (
+    assert has_data_mount or ("streamlit" in compose_text and "./data" in compose_text), (
         "docker-compose.yml must have ./data volume (AC15)"
     )

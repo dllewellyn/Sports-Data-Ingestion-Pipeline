@@ -13,7 +13,6 @@ from data_platform.matchbook.conform import (
     run_conform,
 )
 
-
 # ── U1: parse normal event name ─────────────────────────────────────────────
 
 
@@ -182,12 +181,23 @@ def test_run_conform_empty_events(tmp_path: Path) -> None:
 def test_override_routes_before_fuzzy(tmp_path: Path) -> None:
     """U6: Override event receives confidence=1.0, match_method='human_override'."""
     events = [
-        {"event_id": "100", "event_name": "Arsenal v Chelsea",
-         "start_utc": "2026-08-10T15:00:00Z", "sport_id": 15, "ingested_at": 1}
+        {
+            "event_id": "100",
+            "event_name": "Arsenal v Chelsea",
+            "start_utc": "2026-08-10T15:00:00Z",
+            "sport_id": 15,
+            "ingested_at": 1,
+        }
     ]
     overrides = [
-        {"matchbook_event_id": "100", "action": "link", "match_id": "m_123",
-         "merge_source_match_id": None, "decided_at": "2026-06-29", "decided_by": "human_ui"}
+        {
+            "matchbook_event_id": "100",
+            "action": "link",
+            "match_id": "m_123",
+            "merge_source_match_id": None,
+            "decided_at": "2026-06-29",
+            "decided_by": "human_ui",
+        }
     ]
     report, resolved, exceptions, _ = _run_conform_with_dirs(
         tmp_path, events=events, overrides=overrides
@@ -206,14 +216,25 @@ def test_override_routes_before_fuzzy(tmp_path: Path) -> None:
 def test_high_confidence_auto_link(tmp_path: Path) -> None:
     """U7: HIGH confidence = 0.95 exact, auto_confirmed, fuzzy_high."""
     events = [
-        {"event_id": "200", "event_name": "Arsenal v Chelsea",
-         "start_utc": "2026-08-10T15:00:00Z", "sport_id": 15, "ingested_at": 1}
+        {
+            "event_id": "200",
+            "event_name": "Arsenal v Chelsea",
+            "start_utc": "2026-08-10T15:00:00Z",
+            "sport_id": 15,
+            "ingested_at": 1,
+        }
     ]
     canonical = [
-        {"match_id": "m_1", "season_id": "s1", "home_team_id": "h1",
-         "away_team_id": "a1", "favourite_team_id": None,
-         "kickoff_time": "2026-08-10T15:30:00Z",
-         "home_team_name": "Arsenal", "away_team_name": "Chelsea"}
+        {
+            "match_id": "m_1",
+            "season_id": "s1",
+            "home_team_id": "h1",
+            "away_team_id": "a1",
+            "favourite_team_id": None,
+            "kickoff_time": "2026-08-10T15:30:00Z",
+            "home_team_name": "Arsenal",
+            "away_team_name": "Chelsea",
+        }
     ]
     report, resolved, exceptions, _ = _run_conform_with_dirs(
         tmp_path, events=events, canonical_matches=canonical
@@ -231,15 +252,26 @@ def test_high_confidence_auto_link(tmp_path: Path) -> None:
 def test_high_blocked_by_kickoff_diff(tmp_path: Path) -> None:
     """U8: Same team names but kickoff diff > 90 min -> not HIGH."""
     events = [
-        {"event_id": "300", "event_name": "Arsenal v Chelsea",
-         "start_utc": "2026-08-10T15:00:00Z", "sport_id": 15, "ingested_at": 1}
+        {
+            "event_id": "300",
+            "event_name": "Arsenal v Chelsea",
+            "start_utc": "2026-08-10T15:00:00Z",
+            "sport_id": 15,
+            "ingested_at": 1,
+        }
     ]
     canonical = [
-        {"match_id": "m_1", "season_id": "s1", "home_team_id": "h1",
-         "away_team_id": "a1", "favourite_team_id": None,
-         # 3 hours different
-         "kickoff_time": "2026-08-10T18:30:00Z",
-         "home_team_name": "Arsenal", "away_team_name": "Chelsea"}
+        {
+            "match_id": "m_1",
+            "season_id": "s1",
+            "home_team_id": "h1",
+            "away_team_id": "a1",
+            "favourite_team_id": None,
+            # 3 hours different
+            "kickoff_time": "2026-08-10T18:30:00Z",
+            "home_team_name": "Arsenal",
+            "away_team_name": "Chelsea",
+        }
     ]
     _, resolved, exceptions, _ = _run_conform_with_dirs(
         tmp_path, events=events, canonical_matches=canonical
@@ -260,16 +292,27 @@ def test_medium_confidence_unique(tmp_path: Path) -> None:
     vs canonical "Arsenal" (~0.80) and "Chelsea" (~0.80).
     """
     events = [
-        {"event_id": "400", "event_name": "Arsenal FC v Chelsea FC",
-         "start_utc": "2026-08-10T15:00:00Z", "sport_id": 15, "ingested_at": 1}
+        {
+            "event_id": "400",
+            "event_name": "Arsenal FC v Chelsea FC",
+            "start_utc": "2026-08-10T15:00:00Z",
+            "sport_id": 15,
+            "ingested_at": 1,
+        }
     ]
     canonical = [
-        {"match_id": "m_1", "season_id": "s1", "home_team_id": "h1",
-         "away_team_id": "a1", "favourite_team_id": None,
-         "kickoff_time": "2026-08-10T15:30:00Z",
-         # "Arsenal FC" vs "Arsenal" -> token_sort_ratio ~0.80 (MEDIUM)
-         # "Chelsea FC" vs "Chelsea" -> token_sort_ratio ~0.80 (MEDIUM)
-         "home_team_name": "Arsenal", "away_team_name": "Chelsea"}
+        {
+            "match_id": "m_1",
+            "season_id": "s1",
+            "home_team_id": "h1",
+            "away_team_id": "a1",
+            "favourite_team_id": None,
+            "kickoff_time": "2026-08-10T15:30:00Z",
+            # "Arsenal FC" vs "Arsenal" -> token_sort_ratio ~0.80 (MEDIUM)
+            # "Chelsea FC" vs "Chelsea" -> token_sort_ratio ~0.80 (MEDIUM)
+            "home_team_name": "Arsenal",
+            "away_team_name": "Chelsea",
+        }
     ]
     _, resolved, exceptions, _ = _run_conform_with_dirs(
         tmp_path, events=events, canonical_matches=canonical
@@ -288,18 +331,35 @@ def test_medium_confidence_unique(tmp_path: Path) -> None:
 def test_multiple_medium_candidates_to_exceptions(tmp_path: Path) -> None:
     """U10: multiple MEDIUM candidates -> exceptions with 'multiple_candidates'."""
     events = [
-        {"event_id": "500", "event_name": "Arsenal v Chelsea",
-         "start_utc": "2026-08-10T15:00:00Z", "sport_id": 15, "ingested_at": 1}
+        {
+            "event_id": "500",
+            "event_name": "Arsenal v Chelsea",
+            "start_utc": "2026-08-10T15:00:00Z",
+            "sport_id": 15,
+            "ingested_at": 1,
+        }
     ]
     canonical = [
-        {"match_id": "m_1", "season_id": "s1", "home_team_id": "h1",
-         "away_team_id": "a1", "favourite_team_id": None,
-         "kickoff_time": "2026-08-10T15:30:00Z",
-         "home_team_name": "Arsenal", "away_team_name": "Chelsea"},
-        {"match_id": "m_2", "season_id": "s2", "home_team_id": "h2",
-         "away_team_id": "a2", "favourite_team_id": None,
-         "kickoff_time": "2026-08-10T15:00:00Z",
-         "home_team_name": "Arsenal", "away_team_name": "Chelsea"},
+        {
+            "match_id": "m_1",
+            "season_id": "s1",
+            "home_team_id": "h1",
+            "away_team_id": "a1",
+            "favourite_team_id": None,
+            "kickoff_time": "2026-08-10T15:30:00Z",
+            "home_team_name": "Arsenal",
+            "away_team_name": "Chelsea",
+        },
+        {
+            "match_id": "m_2",
+            "season_id": "s2",
+            "home_team_id": "h2",
+            "away_team_id": "a2",
+            "favourite_team_id": None,
+            "kickoff_time": "2026-08-10T15:00:00Z",
+            "home_team_name": "Arsenal",
+            "away_team_name": "Chelsea",
+        },
     ]
     _, resolved, exceptions, _ = _run_conform_with_dirs(
         tmp_path, events=events, canonical_matches=canonical
@@ -314,14 +374,25 @@ def test_multiple_medium_candidates_to_exceptions(tmp_path: Path) -> None:
 def test_no_match_exceptions_with_candidates(tmp_path: Path) -> None:
     """U11: no match -> exceptions with 'no_match' and candidates JSON."""
     events = [
-        {"event_id": "600", "event_name": "Unknown FC v Mystery United",
-         "start_utc": "2026-08-10T15:00:00Z", "sport_id": 15, "ingested_at": 1}
+        {
+            "event_id": "600",
+            "event_name": "Unknown FC v Mystery United",
+            "start_utc": "2026-08-10T15:00:00Z",
+            "sport_id": 15,
+            "ingested_at": 1,
+        }
     ]
     canonical = [
-        {"match_id": "m_1", "season_id": "s1", "home_team_id": "h1",
-         "away_team_id": "a1", "favourite_team_id": None,
-         "kickoff_time": "2026-08-10T15:30:00Z",
-         "home_team_name": "Liverpool", "away_team_name": "Everton"}
+        {
+            "match_id": "m_1",
+            "season_id": "s1",
+            "home_team_id": "h1",
+            "away_team_id": "a1",
+            "favourite_team_id": None,
+            "kickoff_time": "2026-08-10T15:30:00Z",
+            "home_team_name": "Liverpool",
+            "away_team_name": "Everton",
+        }
     ]
     _, resolved, exceptions, _ = _run_conform_with_dirs(
         tmp_path, events=events, canonical_matches=canonical
@@ -338,8 +409,13 @@ def test_no_match_exceptions_with_candidates(tmp_path: Path) -> None:
 def test_rugby_silently_skipped(tmp_path: Path) -> None:
     """U12: Rugby events (sport_id=2) absent from both outputs."""
     events = [
-        {"event_id": "700", "event_name": "All Blacks v Springboks",
-         "start_utc": "2026-08-10T15:00:00Z", "sport_id": 2, "ingested_at": 1}
+        {
+            "event_id": "700",
+            "event_name": "All Blacks v Springboks",
+            "start_utc": "2026-08-10T15:00:00Z",
+            "sport_id": 2,
+            "ingested_at": 1,
+        }
     ]
     report, resolved, exceptions, _ = _run_conform_with_dirs(tmp_path, events=events)
     assert resolved.empty
@@ -352,14 +428,25 @@ def test_rugby_silently_skipped(tmp_path: Path) -> None:
 def test_idempotency_identical_output(tmp_path: Path) -> None:
     """U13: Same input produces identical output across two runs."""
     events = [
-        {"event_id": "800", "event_name": "Arsenal v Chelsea",
-         "start_utc": "2026-08-10T15:00:00Z", "sport_id": 15, "ingested_at": 1}
+        {
+            "event_id": "800",
+            "event_name": "Arsenal v Chelsea",
+            "start_utc": "2026-08-10T15:00:00Z",
+            "sport_id": 15,
+            "ingested_at": 1,
+        }
     ]
     canonical = [
-        {"match_id": "m_1", "season_id": "s1", "home_team_id": "h1",
-         "away_team_id": "a1", "favourite_team_id": None,
-         "kickoff_time": "2026-08-10T15:30:00Z",
-         "home_team_name": "Arsenal", "away_team_name": "Chelsea"}
+        {
+            "match_id": "m_1",
+            "season_id": "s1",
+            "home_team_id": "h1",
+            "away_team_id": "a1",
+            "favourite_team_id": None,
+            "kickoff_time": "2026-08-10T15:30:00Z",
+            "home_team_name": "Arsenal",
+            "away_team_name": "Chelsea",
+        }
     ]
 
     # Run 1
@@ -373,11 +460,25 @@ def test_idempotency_identical_output(tmp_path: Path) -> None:
     additions_dir = tmp_path / "additions"
     overrides_path = tmp_path / "overrides" / "matchbook_overrides.parquet"
 
-    run_conform(events_dir, canonical_dir, overrides_path, exceptions_dir, conform_dir, additions_dir)
+    run_conform(
+        events_dir,
+        canonical_dir,
+        overrides_path,
+        exceptions_dir,
+        conform_dir,
+        additions_dir,
+    )
     r1 = pd.read_parquet(conform_dir / "matchbook_resolved_links.parquet")
 
     # Run 2 (same input, overwrites same output)
-    run_conform(events_dir, canonical_dir, overrides_path, exceptions_dir, conform_dir, additions_dir)
+    run_conform(
+        events_dir,
+        canonical_dir,
+        overrides_path,
+        exceptions_dir,
+        conform_dir,
+        additions_dir,
+    )
     r2 = pd.read_parquet(conform_dir / "matchbook_resolved_links.parquet")
 
     pd.testing.assert_frame_equal(r1, r2)
@@ -389,12 +490,23 @@ def test_idempotency_identical_output(tmp_path: Path) -> None:
 def test_new_canonical_writes_additions(tmp_path: Path) -> None:
     """U15: Override with action='new_canonical' writes to additions Parquet."""
     events = [
-        {"event_id": "900", "event_name": "New FC v Fresh United",
-         "start_utc": "2026-08-10T15:00:00Z", "sport_id": 15, "ingested_at": 1}
+        {
+            "event_id": "900",
+            "event_name": "New FC v Fresh United",
+            "start_utc": "2026-08-10T15:00:00Z",
+            "sport_id": 15,
+            "ingested_at": 1,
+        }
     ]
     overrides = [
-        {"matchbook_event_id": "900", "action": "new_canonical", "match_id": None,
-         "merge_source_match_id": None, "decided_at": "2026-06-29", "decided_by": "human_ui"}
+        {
+            "matchbook_event_id": "900",
+            "action": "new_canonical",
+            "match_id": None,
+            "merge_source_match_id": None,
+            "decided_at": "2026-06-29",
+            "decided_by": "human_ui",
+        }
     ]
     report, resolved, exceptions, additions = _run_conform_with_dirs(
         tmp_path, events=events, overrides=overrides
@@ -413,7 +525,7 @@ def test_canonical_match_id_replication() -> None:
     import hashlib
 
     result = compute_canonical_match_id("league1", "season1", "2026-08-10", "home1", "away1")
-    expected = hashlib.md5("league1|season1|2026-08-10|home1|away1".encode()).hexdigest()
+    expected = hashlib.md5(b"league1|season1|2026-08-10|home1|away1").hexdigest()
     assert result == expected
 
 
@@ -423,8 +535,13 @@ def test_canonical_match_id_replication() -> None:
 def test_invalid_start_utc_to_exceptions(tmp_path: Path) -> None:
     """E14: Unparseable start_utc -> exceptions with 'invalid_start_utc'."""
     events = [
-        {"event_id": "1000", "event_name": "Arsenal v Chelsea",
-         "start_utc": "not-a-date", "sport_id": 15, "ingested_at": 1}
+        {
+            "event_id": "1000",
+            "event_name": "Arsenal v Chelsea",
+            "start_utc": "not-a-date",
+            "sport_id": 15,
+            "ingested_at": 1,
+        }
     ]
     _, resolved, exceptions, _ = _run_conform_with_dirs(tmp_path, events=events)
     assert resolved.empty
@@ -438,16 +555,32 @@ def test_invalid_start_utc_to_exceptions(tmp_path: Path) -> None:
 def test_dedup_by_latest_ingested_at(tmp_path: Path) -> None:
     """E15: Duplicate event_id deduplicated by latest ingested_at."""
     events = [
-        {"event_id": "1100", "event_name": "Arsenal v Chelsea",
-         "start_utc": "2026-08-10T15:00:00Z", "sport_id": 15, "ingested_at": 1},
-        {"event_id": "1100", "event_name": "Arsenal v Chelsea Updated",
-         "start_utc": "2026-08-10T15:00:00Z", "sport_id": 15, "ingested_at": 2},
+        {
+            "event_id": "1100",
+            "event_name": "Arsenal v Chelsea",
+            "start_utc": "2026-08-10T15:00:00Z",
+            "sport_id": 15,
+            "ingested_at": 1,
+        },
+        {
+            "event_id": "1100",
+            "event_name": "Arsenal v Chelsea Updated",
+            "start_utc": "2026-08-10T15:00:00Z",
+            "sport_id": 15,
+            "ingested_at": 2,
+        },
     ]
     canonical = [
-        {"match_id": "m_1", "season_id": "s1", "home_team_id": "h1",
-         "away_team_id": "a1", "favourite_team_id": None,
-         "kickoff_time": "2026-08-10T15:30:00Z",
-         "home_team_name": "Arsenal", "away_team_name": "Chelsea"}
+        {
+            "match_id": "m_1",
+            "season_id": "s1",
+            "home_team_id": "h1",
+            "away_team_id": "a1",
+            "favourite_team_id": None,
+            "kickoff_time": "2026-08-10T15:30:00Z",
+            "home_team_name": "Arsenal",
+            "away_team_name": "Chelsea",
+        }
     ]
     _, resolved, exceptions, _ = _run_conform_with_dirs(
         tmp_path, events=events, canonical_matches=canonical
