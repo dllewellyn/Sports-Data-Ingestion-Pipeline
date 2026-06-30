@@ -37,6 +37,7 @@ dependencies = [
     "streamlit>=1.35",
     # PostgreSQL driver for sports-gaming-engine migration (Spec 008)
     "psycopg2-binary>=2.9",
+    "mcp>=1.28.1",
 ]
 
 [dependency-groups]
