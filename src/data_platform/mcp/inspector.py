@@ -161,6 +161,40 @@ class LakehouseInspector:
             "columns": columns,
         }
 
+    def get_dataset_sample(self, layer: str, name: str) -> dict[str, Any]:
+        """Fetch up to 10 sample records from landed Parquet file."""
+        parquet_path = self.data_dir / layer / f"{name}.parquet"
+        if not parquet_path.exists():
+            return {
+                "status": "Sample unavailable",
+                "details": f"Parquet file not found at {parquet_path}",
+            }
+
+        try:
+            conn = duckdb.connect(":memory:")
+            rel = conn.execute("SELECT * FROM read_parquet(?) LIMIT 10", [str(parquet_path)])
+            col_names = [desc[0] for desc in rel.description]
+            raw_rows = rel.fetchall()
+            conn.close()
+
+            sample_rows = []
+            for row in raw_rows:
+                row_dict = {}
+                for idx, col in enumerate(col_names):
+                    row_dict[col] = row[idx]
+                sample_rows.append(row_dict)
+
+            return {
+                "dataset": f"{layer}.{name}",
+                "sample_count": len(sample_rows),
+                "sample_rows": sample_rows,
+            }
+        except Exception as e:
+            return {
+                "status": "Sample unavailable",
+                "details": f"Failed to read Parquet sample at {parquet_path}: {e}",
+            }
+
     def _get_manifest_columns(self, layer: str, name: str) -> tuple[dict[str, Any], bool]:
         if not self.dbt_manifest_path.exists():
             return {}, False
