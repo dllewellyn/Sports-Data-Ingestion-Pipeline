@@ -17,7 +17,9 @@ from .assets.espn import espn_bronze
 from .assets.football_extra import football_extra
 from .assets.football_main import football_main
 from .assets.gold import publish_gold_parquet
+from .assets.matchbook_conform import matchbook_conform
 from .assets.matchbook_events import matchbook_events_bronze
+from .assets.matchbook_t60 import matchbook_t60_enrichment
 from .espn.http_client import ThrottledHttpClient as EspnThrottledHttpClient
 from .football.http_client import ThrottledHttpClient
 from .otel import configure_telemetry
@@ -53,9 +55,26 @@ espn_assets = AssetSelection.assets(
 # all()-based hello-world job. Run via dedicated `matchbook_events_ingestion` job.
 matchbook_events_assets = AssetSelection.assets(matchbook_events_bronze)
 
+# Matchbook conform layer (Spec 006): conform + T-60 enrichment + the dbt models they
+# feed. Excluded from medallion_hello_world — it is a heavy standalone pipeline that
+# depends on a full Matchbook events bronze lake (AC13).
+matchbook_conform_assets = AssetSelection.assets(
+    matchbook_conform,
+    matchbook_t60_enrichment,
+    AssetKey(["silver", "matchbook_event_link"]),
+    AssetKey(["silver", "canonical_match_export"]),
+    AssetKey(["silver", "canonical_team_export"]),
+)
+
 medallion_job = define_asset_job(
     name="medallion_hello_world",
-    selection=AssetSelection.all() - football_assets - espn_assets - matchbook_events_assets,
+    selection=(
+        AssetSelection.all()
+        - football_assets
+        - espn_assets
+        - matchbook_events_assets
+        - matchbook_conform_assets
+    ),
     description="End-to-end: ingest raw users -> dbt silver/gold (+tests) -> gold Parquet.",
 )
 
@@ -104,6 +123,23 @@ matchbook_events_schedule = ScheduleDefinition(
     cron_schedule="0 */6 * * *",
 )
 
+# Matchbook conform job: runs 1 hour after the matchbook_events_ingestion job
+# (cron: 0 */6 * * *) so the bronze lake is fresh before conform runs (AC13).
+matchbook_conform_job = define_asset_job(
+    name="matchbook_conform_job",
+    selection=matchbook_conform_assets,
+    description=(
+        "Matchbook conform layer: fuzzy-match events to canonical matches, "
+        "T-60 enrichment, and dbt rebuild of matchbook_event_link + match."
+    ),
+)
+
+matchbook_conform_schedule = ScheduleDefinition(
+    name="matchbook_conform_schedule",
+    job=matchbook_conform_job,
+    cron_schedule="0 1,7,13,19 * * *",  # 1 hour after the 6-hourly events ingestion
+)
+
 defs = Definitions(
     assets=[
         raw_users,
@@ -113,9 +149,22 @@ defs = Definitions(
         football_extra,
         espn_bronze,
         matchbook_events_bronze,
+        matchbook_conform,
+        matchbook_t60_enrichment,
     ],
-    jobs=[medallion_job, football_backfill_job, espn_job, matchbook_events_job],
-    schedules=[daily_schedule, espn_schedule, matchbook_events_schedule],
+    jobs=[
+        medallion_job,
+        football_backfill_job,
+        espn_job,
+        matchbook_events_job,
+        matchbook_conform_job,
+    ],
+    schedules=[
+        daily_schedule,
+        espn_schedule,
+        matchbook_events_schedule,
+        matchbook_conform_schedule,
+    ],
     resources={
         "dbt": DbtCliResource(project_dir=dbt_project),
         "football_http": ThrottledHttpClient(),

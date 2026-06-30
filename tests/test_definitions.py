@@ -125,3 +125,59 @@ def test_matchbook_events_excluded_from_hello_world() -> None:
     assert "matchbook_events_bronze" not in hello_world_keys, (
         "matchbook_events_bronze must be excluded from medallion_hello_world"
     )
+
+
+# ── Matchbook conform wiring tests (Spec 006 S12 — AC13) ─────────────────────
+
+
+def test_matchbook_conform_job_registered() -> None:
+    """matchbook_conform_job is registered in defs (AC13)."""
+    defs = _load_defs()
+
+    job_names = {job.name for job in defs.jobs}
+    assert "matchbook_conform_job" in job_names
+
+
+def test_matchbook_conform_schedule_registered() -> None:
+    """matchbook_conform_schedule is registered with correct cron (AC13)."""
+    defs = _load_defs()
+
+    schedules = {s.name: s for s in defs.schedules}
+    assert "matchbook_conform_schedule" in schedules
+    schedule = schedules["matchbook_conform_schedule"]
+    assert schedule.cron_schedule == "0 1,7,13,19 * * *"
+    assert schedule.job.name == "matchbook_conform_job"
+
+
+def test_matchbook_conform_excluded_from_hello_world() -> None:
+    """U30 / AC13 — matchbook_conform IS registered AND NOT in medallion_hello_world.
+
+    Two-part test (CLAUDE.md pattern): (1) asset IS in AssetSelection.all() resolved keys,
+    (2) asset is NOT in medallion_hello_world job keys. A one-part test would pass vacuously
+    before the asset is registered.
+    """
+    defs = _load_defs()
+
+    # Part 1: matchbook_conform IS registered in defs (in AssetSelection.all())
+    all_asset_keys: set[AssetKey] = set()
+    for assets_def in defs.assets:
+        all_asset_keys |= set(assets_def.keys)
+    assert AssetKey(["matchbook_conform"]) in all_asset_keys, (
+        "matchbook_conform must be registered in defs.assets"
+    )
+
+    # Part 2: matchbook_conform is NOT in medallion_hello_world
+    hello_world_keys = _job_keys(defs, "medallion_hello_world")
+    assert "matchbook_conform" not in hello_world_keys, (
+        "matchbook_conform must be excluded from medallion_hello_world"
+    )
+
+
+def test_matchbook_conform_asset_deps_include_events_bronze() -> None:
+    """U31 / AC14 — matchbook_conform depends on AssetKey(['matchbook_events_bronze'])."""
+    from data_platform.assets.matchbook_conform import matchbook_conform as conform_asset
+
+    dep_keys = set(conform_asset.dependency_keys)
+    assert AssetKey(["matchbook_events_bronze"]) in dep_keys, (
+        "matchbook_conform must depend on matchbook_events_bronze"
+    )

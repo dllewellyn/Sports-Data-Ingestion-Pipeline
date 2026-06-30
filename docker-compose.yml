@@ -64,6 +64,16 @@ services:
     ports:
       - "${JUPYTER_PORT:-8888}:8888"
 
+  # Streamlit exceptions review UI — reads exceptions Parquet, writes override decisions.
+  # Port 8501 (Streamlit default). No telemetry dependency; reads/writes ./data only.
+  streamlit:
+    <<: *app
+    command: >
+      sh -c "streamlit run streamlit_app/matchbook_exceptions.py
+             --server.address 0.0.0.0 --server.port 8501"
+    ports:
+      - "${STREAMLIT_PORT:-8501}:8501"
+
   # Matchbook odds tick ingestor — reads matchbook_odds_stream from Redis
   # (provided by the external sports-gaming-engine stack) and writes ZSTD
   # Parquet to data/bronze/matchbook_odds/. Redis is NOT started here.

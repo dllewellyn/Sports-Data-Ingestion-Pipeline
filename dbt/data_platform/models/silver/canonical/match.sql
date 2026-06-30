@@ -51,36 +51,69 @@ resolved as (
     left join {{ ref('team_aliases') }} a on e.away_team_name = a.alias
 ),
 
-final as (
+espn_matches as (
     select
         {{ canonical_match_id('league_id', 'season_id', 'cast(kickoff_time as date)', 'home_team_id', 'away_team_id') }} as match_id,
         season_id,
         home_team_id,
         away_team_id,
-        cast(null as varchar) as favourite_team_id,
         kickoff_time,
         cast(null as varchar) as ht_score,
         case
-            when status_completed then concat(cast(home_score as varchar), '-', cast(away_score as varchar))
+            when status_completed
+            then concat(cast(home_score as varchar), '-', cast(away_score as varchar))
             else null
         end                   as ft_score,
         status_completed
     from resolved
+),
+
+-- New canonical rows minted by the Matchbook conform engine (action='new_canonical').
+-- try_read_parquet returns zero rows (not an error) when the file is absent (E11).
+canonical_additions as (
+    select
+        match_id,
+        season_id,
+        home_team_id,
+        away_team_id,
+        kickoff_time,
+        cast(null as varchar) as ht_score,
+        cast(null as varchar) as ft_score,
+        false                 as status_completed
+    from try_read_parquet(
+        '{{ env_var("DATA_DIR", "/app/data") }}/silver/matchbook_canonical_additions.parquet'
+    )
+),
+
+combined as (
+    select * from espn_matches
+    union all
+    select * from canonical_additions
+),
+
+-- T-60 enrichment: favourite team from pre-match Matchbook odds.
+-- try_read_parquet returns zero rows when file absent (E11 — favourite_team_id stays NULL).
+t60_enrichment as (
+    select match_id, favourite_team_id
+    from try_read_parquet(
+        '{{ env_var("DATA_DIR", "/app/data") }}/silver/matchbook_t60_enrichment.parquet'
+    )
 )
 
 -- One row per canonical match_id. If a fixture appears more than once for the same
 -- (season, UTC date, home, away), prefer the FINAL row (carries ft_score).
 select
-    match_id,
-    season_id,
-    home_team_id,
-    away_team_id,
-    favourite_team_id,
-    kickoff_time,
-    ht_score,
-    ft_score
-from final
+    c.match_id,
+    c.season_id,
+    c.home_team_id,
+    c.away_team_id,
+    t60.favourite_team_id,
+    c.kickoff_time,
+    c.ht_score,
+    c.ft_score
+from combined c
+left join t60_enrichment t60 on c.match_id = t60.match_id
 qualify row_number() over (
-    partition by match_id
-    order by status_completed desc, kickoff_time desc
+    partition by c.match_id
+    order by c.status_completed desc, c.kickoff_time desc
 ) = 1
