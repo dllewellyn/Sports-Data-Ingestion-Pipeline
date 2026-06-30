@@ -30,7 +30,6 @@ class BronzeAwareTranslator(DagsterDbtTranslator):
 
     # dbt source name -> upstream Dagster bronze asset key.
     _SOURCE_ASSET_KEYS = {
-        "users": AssetKey(["raw_users"]),
         "espn_events": AssetKey(["espn_bronze"]),
         # matchbook_resolved_links is produced by the matchbook_conform Python asset (Spec 006)
         "matchbook_resolved_links": AssetKey(["matchbook_conform"]),

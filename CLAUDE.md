@@ -279,6 +279,15 @@ convention — add it here in the same commit.** Keep additions concise and put
 hard-won constraints under "Non-obvious constraints". Remove guidance that becomes
 stale. Do not restate what's discoverable from the file tree or generic Python advice.
 
+**`data flows.md`** is the companion document describing the end-to-end data flow
+(sources → bronze → silver canonical → conform → enrichment → gold). **Keep it
+current in the same commit whenever you:**
+- Add or remove a data source (new bronze asset)
+- Add a dbt silver or gold model that changes the flow
+- Change the conform or T-60 enrichment logic materially
+- Build a new gold analytics model joining the linked data
+- Run a bulk migration that significantly changes table row counts
+
 # Do not overengieer this project
 
 Code should be simple and easy to understand. Avoid unnecessary abstractions, patterns, or frameworks that do not add clear value.

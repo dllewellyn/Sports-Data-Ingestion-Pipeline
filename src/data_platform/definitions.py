@@ -1,4 +1,4 @@
-"""Dagster code location: assets, resources, the hello-world job and schedule."""
+"""Dagster code location: assets, resources, and orchestration."""
 
 from __future__ import annotations
 
@@ -11,13 +11,11 @@ from dagster import (
 )
 from dagster_dbt import DbtCliResource
 
-from .assets.bronze import raw_users
 from .assets.dbt import dbt_models, dbt_project
 from .assets.espn import espn_bronze
 from .assets.espn_postgres_migration import espn_postgres_migration
 from .assets.football_extra import football_extra
 from .assets.football_main import football_main
-from .assets.gold import publish_gold_parquet
 from .assets.matchbook_conform import matchbook_conform
 from .assets.matchbook_events import matchbook_events_bronze
 from .assets.matchbook_postgres_migration import matchbook_postgres_migration
@@ -30,18 +28,14 @@ from .otel import configure_telemetry
 # webserver process and every run subprocess).
 configure_telemetry()
 
-# Hello-world flow: bronze (ingest) -> silver+gold (dbt) -> gold Parquet export.
-# Exclude the football bronze assets — they are a separate, on-demand source (a full
-# backfill is ~705 files); `AssetSelection.all()` would otherwise sweep them into this
-# demo job (and the daily schedule). Run football via `football_backfill` instead.
+# Football bronze assets: separate, on-demand source (full backfill is ~705 files).
 football_assets = AssetSelection.assets(football_main, football_extra)
 
-# ESPN soccer flow: its own end-to-end source (bronze scoreboards -> the dbt silver
-# staging + canonical conform + link models). Like football, it must NOT be swept into
-# the all()-based hello-world job/daily schedule — run it via the dedicated `espn_job`
-# below. The dbt model AssetKeys are `["silver","<model>"]` (verified from the manifest;
-# NOT `["silver","canonical",...]`); the `team_aliases` seed is an ESPN-conform input and
-# surfaces as `["silver","team_aliases"]`, so it rides with this source too.
+# ESPN soccer flow: end-to-end source (bronze scoreboards -> dbt silver staging + 
+# canonical conform + link models). Run via the dedicated `espn_job`. The dbt model 
+# AssetKeys are `["silver","<model>"]` (verified from the manifest; NOT 
+# `["silver","canonical",...]`); the `team_aliases` seed is an ESPN-conform input and
+# surfaces as `["silver","team_aliases"]`, so it rides with this source.
 espn_assets = AssetSelection.assets(
     espn_bronze,
     AssetKey(["silver", "stg_espn_events"]),
@@ -53,17 +47,15 @@ espn_assets = AssetSelection.assets(
     AssetKey(["silver", "team_aliases"]),
 )
 
-# Matchbook events bronze ingest: standalone 6-hourly source, excluded from the
-# all()-based hello-world job. Run via dedicated `matchbook_events_ingestion` job.
+# Matchbook events bronze ingest: standalone 6-hourly source.
 matchbook_events_assets = AssetSelection.assets(matchbook_events_bronze)
 
-# One-off migration assets: excluded from all scheduled jobs.
+# One-off migration assets.
 matchbook_migration_assets = AssetSelection.assets(matchbook_postgres_migration)
 espn_migration_assets = AssetSelection.assets(espn_postgres_migration)
 
-# Matchbook conform layer (Spec 006): conform + T-60 enrichment + the dbt models they
-# feed. Excluded from medallion_hello_world — it is a heavy standalone pipeline that
-# depends on a full Matchbook events bronze lake (AC13).
+# Matchbook conform layer: conform + T-60 enrichment + the dbt models they feed.
+# Heavy standalone pipeline that depends on a full Matchbook events bronze lake.
 matchbook_conform_assets = AssetSelection.assets(
     matchbook_conform,
     matchbook_t60_enrichment,
@@ -72,40 +64,19 @@ matchbook_conform_assets = AssetSelection.assets(
     AssetKey(["silver", "canonical_team_export"]),
 )
 
-medallion_job = define_asset_job(
-    name="medallion_hello_world",
-    selection=(
-        AssetSelection.all()
-        - football_assets
-        - espn_assets
-        - matchbook_events_assets
-        - matchbook_conform_assets
-        - matchbook_migration_assets
-        - espn_migration_assets
-    ),
-    description="End-to-end: ingest raw users -> dbt silver/gold (+tests) -> gold Parquet.",
-)
-
-daily_schedule = ScheduleDefinition(
-    name="medallion_daily",
-    job=medallion_job,
-    cron_schedule="0 6 * * *",  # stopped by default; toggle on in the UI
-)
 
 # On-demand backfill of the football-data.co.uk bronze source (both families).
-# No schedule (Non-goal): run it manually. Idempotent re-runs skip already-landed
-# historical files and always refresh current-season files (skip-existing in the
-# throttled client). Pacing (0.4s) applies to discovery + file GETs within each run.
+# No schedule: run it manually. Idempotent re-runs skip already-landed historical files
+# and always refresh current-season files.
 football_backfill_job = define_asset_job(
     name="football_backfill",
     selection=football_assets,
     description="Backfill football-data.co.uk main + extra bronze Parquet over the registry.",
 )
 
-# ESPN runs end-to-end on a cadence (Q-plan-2 Option A): the bronze scoreboard ingest
-# plus the dbt staging + canonical conform + link models, so each run lands fresh
-# scoreboards AND re-derives the canonical match/link rows (deterministic surrogate ids
-# make the conform an idempotent overwrite). Every 6 hours (AC9).
+# ESPN runs end-to-end on a cadence: the bronze scoreboard ingest plus the dbt staging 
+# + canonical conform + link models, so each run lands fresh scoreboards AND re-derives 
+# the canonical match/link rows. Every 6 hours.
 espn_job = define_asset_job(
     name="espn_ingestion",
     selection=espn_assets,
@@ -131,8 +102,8 @@ matchbook_events_schedule = ScheduleDefinition(
     cron_schedule="0 */6 * * *",
 )
 
-# Matchbook conform job: runs 1 hour after the matchbook_events_ingestion job
-# (cron: 0 */6 * * *) so the bronze lake is fresh before conform runs (AC13).
+# Matchbook conform job: runs 1 hour after matchbook_events_ingestion so the bronze lake 
+# is fresh before conform runs.
 matchbook_conform_job = define_asset_job(
     name="matchbook_conform_job",
     selection=matchbook_conform_assets,
@@ -150,9 +121,7 @@ matchbook_conform_schedule = ScheduleDefinition(
 
 defs = Definitions(
     assets=[
-        raw_users,
         dbt_models,
-        publish_gold_parquet,
         football_main,
         football_extra,
         espn_bronze,
@@ -163,14 +132,12 @@ defs = Definitions(
         matchbook_t60_enrichment,
     ],
     jobs=[
-        medallion_job,
         football_backfill_job,
         espn_job,
         matchbook_events_job,
         matchbook_conform_job,
     ],
     schedules=[
-        daily_schedule,
         espn_schedule,
         matchbook_events_schedule,
         matchbook_conform_schedule,

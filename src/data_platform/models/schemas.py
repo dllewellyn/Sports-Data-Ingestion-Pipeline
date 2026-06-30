@@ -1,4 +1,4 @@
-"""Pydantic v2 models for the source API payload.
+"""Pydantic v2 models for bronze ingest validation.
 
 This is the "validate data as it comes in" layer at the edge of the system:
 every record from the API is parsed/validated here before it is allowed any
@@ -15,52 +15,6 @@ import math
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-class Geo(BaseModel):
-    lat: float
-    lng: float
-
-
-class Address(BaseModel):
-    street: str
-    suite: str = ""
-    city: str
-    zipcode: str
-    geo: Geo
-
-
-class Company(BaseModel):
-    name: str
-
-
-class User(BaseModel):
-    """One user record as returned by the source API."""
-
-    id: int = Field(ge=1)
-    name: str
-    username: str
-    email: str  # source data is not RFC-strict; keep as str, dbt asserts shape
-    phone: str = ""
-    website: str = ""
-    address: Address
-    company: Company
-
-    def to_flat(self) -> dict:
-        """Flatten the nested record into a single bronze row."""
-        return {
-            "id": self.id,
-            "name": self.name,
-            "username": self.username,
-            "email": self.email,
-            "phone": self.phone,
-            "website": self.website,
-            "company_name": self.company.name,
-            "city": self.address.city,
-            "zipcode": self.address.zipcode,
-            "lat": self.address.geo.lat,
-            "lng": self.address.geo.lng,
-        }
-
-
 def _missing(v: object) -> bool:
     """True for the empty/footer/blank values that pepper football-data CSVs."""
     if v is None:
@@ -71,8 +25,6 @@ def _missing(v: object) -> bool:
 
 
 # --- football-data.co.uk bronze record contracts (D4, D5) ----------------------
-# Two families, two cores. `extra="ignore"` lets the wide optional odds/stat
-# columns ride along at the frame level (Pandera) without bloating the record.
 
 
 class MainMatchRecord(BaseModel):

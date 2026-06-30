@@ -69,16 +69,6 @@ def test_espn_schedule_is_six_hourly_targeting_the_job() -> None:
     assert schedule.job.name == "espn_ingestion"
 
 
-def test_espn_excluded_from_hello_world_job() -> None:
-    """AC10 — ESPN is its own job, subtracted from the all()-based demo job (and thus
-    its daily schedule), or the demo would trigger the full ESPN flow."""
-    defs = _load_defs()
-
-    assert not (_job_keys(defs, "medallion_hello_world") & ESPN_KEYS), (
-        "ESPN excluded from hello-world"
-    )
-
-
 # ── Matchbook events wiring tests (Spec 004 S5 — AC9, AC10) ───────────────────
 
 
@@ -104,29 +94,6 @@ def test_matchbook_events_schedule_six_hourly() -> None:
     assert schedule.job.name == "matchbook_events_ingestion"
 
 
-def test_matchbook_events_excluded_from_hello_world() -> None:
-    """AC9 — matchbook_events_bronze IS registered in defs AND is NOT in medallion_hello_world.
-
-    Two-part assertion: first part verifies the asset is actually registered; second
-    part verifies it is excluded from the all()-based demo job.
-    """
-    defs = _load_defs()
-
-    # Part 1: asset IS registered (it should be in AssetSelection.all())
-    all_asset_keys: set[AssetKey] = set()
-    for assets_def in defs.assets:
-        all_asset_keys |= set(assets_def.keys)
-    assert AssetKey(["matchbook_events_bronze"]) in all_asset_keys, (
-        "matchbook_events_bronze must be registered in defs.assets"
-    )
-
-    # Part 2: asset is NOT in medallion_hello_world (excluded via AssetSelection subtraction)
-    hello_world_keys = _job_keys(defs, "medallion_hello_world")
-    assert "matchbook_events_bronze" not in hello_world_keys, (
-        "matchbook_events_bronze must be excluded from medallion_hello_world"
-    )
-
-
 # ── Matchbook conform wiring tests (Spec 006 S12 — AC13) ─────────────────────
 
 
@@ -147,30 +114,6 @@ def test_matchbook_conform_schedule_registered() -> None:
     schedule = schedules["matchbook_conform_schedule"]
     assert schedule.cron_schedule == "0 1,7,13,19 * * *"
     assert schedule.job.name == "matchbook_conform_job"
-
-
-def test_matchbook_conform_excluded_from_hello_world() -> None:
-    """U30 / AC13 — matchbook_conform IS registered AND NOT in medallion_hello_world.
-
-    Two-part test (CLAUDE.md pattern): (1) asset IS in AssetSelection.all() resolved keys,
-    (2) asset is NOT in medallion_hello_world job keys. A one-part test would pass vacuously
-    before the asset is registered.
-    """
-    defs = _load_defs()
-
-    # Part 1: matchbook_conform IS registered in defs (in AssetSelection.all())
-    all_asset_keys: set[AssetKey] = set()
-    for assets_def in defs.assets:
-        all_asset_keys |= set(assets_def.keys)
-    assert AssetKey(["matchbook_conform"]) in all_asset_keys, (
-        "matchbook_conform must be registered in defs.assets"
-    )
-
-    # Part 2: matchbook_conform is NOT in medallion_hello_world
-    hello_world_keys = _job_keys(defs, "medallion_hello_world")
-    assert "matchbook_conform" not in hello_world_keys, (
-        "matchbook_conform must be excluded from medallion_hello_world"
-    )
 
 
 def test_matchbook_conform_asset_deps_include_events_bronze() -> None:
