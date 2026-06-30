@@ -78,12 +78,12 @@ def load_overrides(path: Path) -> pd.DataFrame:
 def parse_event_name(event_name: str) -> tuple[str, str] | None:
     """Parse a Matchbook event name into (home, away) team names.
 
-    Split on the FIRST occurrence of `` v `` (space-v-space). Returns None if
+    Split on `` vs `` (the Matchbook separator). Returns None if
     no separator found or either part is empty after stripping.
     """
-    if " v " not in event_name:
+    if " vs " not in event_name:
         return None
-    parts = event_name.split(" v ", maxsplit=1)
+    parts = event_name.split(" vs ", maxsplit=1)
     home = parts[0].strip()
     away = parts[1].strip()
     if not home or not away:
