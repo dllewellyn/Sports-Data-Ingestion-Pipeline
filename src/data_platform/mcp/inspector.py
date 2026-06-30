@@ -1,6 +1,7 @@
 """Lakehouse catalogue inspection engine for MCP server (Spec 007)."""
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -194,6 +195,44 @@ class LakehouseInspector:
                 "status": "Sample unavailable",
                 "details": f"Failed to read Parquet sample at {parquet_path}: {e}",
             }
+
+    def run_sql_query(self, query: str) -> dict[str, Any]:
+        """Execute a guardrailed read-only analytical SQL query over landed Parquet files."""
+        mutating_pattern = re.compile(
+            r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|ATTACH|DETACH|PRAGMA|COPY|EXPORT)\b",
+            re.IGNORECASE,
+        )
+        if mutating_pattern.search(query):
+            return {"error": "Only read-only SELECT queries are permitted"}
+
+        try:
+            conn = duckdb.connect(":memory:")
+            for layer in ("bronze", "silver", "gold"):
+                layer_dir = self.data_dir / layer
+                if layer_dir.exists():
+                    for p in sorted(layer_dir.glob("*.parquet")):
+                        view_name = f"{layer}_{p.stem}"
+                        conn.execute(
+                            f"CREATE VIEW {view_name} AS SELECT * FROM read_parquet('{p}')"
+                        )
+
+            rel = conn.execute(query)
+            col_names = [desc[0] for desc in rel.description] if rel.description else []
+            raw_rows = rel.fetchall()
+            conn.close()
+
+            records = []
+            for row in raw_rows[:50]:
+                row_dict = {col: row[idx] for idx, col in enumerate(col_names)}
+                records.append(row_dict)
+
+            return {
+                "query": query,
+                "row_count": len(raw_rows),
+                "records": records,
+            }
+        except Exception as e:
+            return {"error": str(e)}
 
     def _get_manifest_columns(self, layer: str, name: str) -> tuple[dict[str, Any], bool]:
         if not self.dbt_manifest_path.exists():
