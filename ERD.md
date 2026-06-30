@@ -54,7 +54,7 @@ erDiagram
     SEASON ||--o{ MATCH : contains
     TEAM ||--o{ MATCH : "home team"
     TEAM ||--o{ MATCH : "away team"
-    TEAM |o--o{ MATCH : "favourite (T-45m)"
+    TEAM |o--o{ MATCH : "favourite (T-60m)"
     MATCH ||--o{ ESPN_MATCH_LINK : "mapped via"
     MATCH ||--o{ MATCHBOOK_EVENT_LINK : "mapped via"
     MATCH ||--o{ FOOTBALL_DATA_MATCH_LINK : "mapped via"
@@ -195,7 +195,7 @@ The central fixture entity linking participants within a season context. Impleme
 | `season_id` | `VARCHAR` | No (FK) | References `season.season_id`. The competition is reached via `season.league_id`. |
 | `home_team_id` | `VARCHAR` | No (FK) | References `team.team_id` for the home participant. |
 | `away_team_id` | `VARCHAR` | No (FK) | References `team.team_id` for the away participant. |
-| `favourite_team_id` | `VARCHAR` | Yes (FK) | References `team.team_id` for the market favourite, captured exactly **T-45 minutes** before scheduled kickoff. |
+| `favourite_team_id` | `VARCHAR` | Yes (FK) | References `team.team_id` for the market favourite, captured approximately **T-60 minutes** before scheduled kickoff (window: kickoff_utc − 75 min to kickoff_utc − 45 min, midpoint T-60). |
 | `kickoff_time` | `TIMESTAMP` | No | Scheduled kickoff timestamp (e.g. UTC ISO 8601 or epoch ms), used as the baseline for pre-match timings. |
 | `ht_score` | `VARCHAR` | Yes | Half-time scoreline (e.g., `"1-0"`). |
 | `ft_score` | `VARCHAR` | Yes | Full-time scoreline (e.g., `"2-1"`). |
