@@ -25,7 +25,7 @@ Rather than maintaining separate bespoke tables for every provider entity (e.g.,
 | `season` (`silver.season`) | DuckLake | **Physical Table Exists** | One edition of a competition (`season.league_id` → `league.league_id`). Materialized in this repo's dbt-owned DuckLake catalog (`models/silver/canonical/season.sql`). |
 | `match` (`silver.match`) | Postgres | **Physical Table Exists** | Distinct canonical table in `silver.match` (accessible via `bronze.match` view). Belongs to a `season` (`match.season_id`); the league is reached via `season.league_id`. |
 | `espn_match_link` (`silver.espn_match_link`) | Postgres | **Physical Table Exists** | Distinct canonical linking table in `silver.espn_match_link` (accessible via `bronze.espn_match_link` view). |
-| `matchbook_event_link` (`silver.matchbook_event_link`) | Postgres | **Physical Table Exists** | Distinct canonical linking table in `silver.matchbook_event_link` (accessible via `bronze.matchbook_event_link` view). |
+| `matchbook_event_link` (`silver.matchbook_event_link`) | DuckLake | **Physical Table Exists** | Canonical linking table materialized in DuckLake by the Matchbook conform layer (Spec 006). Columns: `link_id`, `match_id`, `matchbook_event_id`, `match_method`, `confidence`, `review_status`. |
 | `football_data_match_link` (`silver.football_data_match_link`) | DuckLake | **Physical Table Exists** | Linking table mapping canonical matches to football-data.co.uk source rows via a **composite natural key** (the source exposes no stable match id). Materialized in this repo's dbt-owned DuckLake catalog (`models/silver/canonical/`). |
 | `bronze.provider_match_cache` | Postgres | **Physical Table Exists** | Active ingestion table storing fixture snapshots per provider (`provider_id = event_id`). |
 | `bronze.matchbook_market_catalogue`| Postgres | **Physical Table Exists** | Active ingestion table storing Matchbook market definitions and trading status. |
@@ -40,9 +40,10 @@ Rather than maintaining separate bespoke tables for every provider entity (e.g.,
 > `profiles.yml`) as typed dbt models under
 > `dbt/data_platform/models/silver/canonical/`. The **ESPN conform layer** (spec 002)
 > populates `league`, `season`, `team`, `match` and `espn_match_link` from the ESPN
-> bronze Parquet; `matchbook_event_link` and `football_data_match_link` remain empty
-> scaffolds until their own conform layers land (resolving through the same
-> `canonical_match_id` identity).
+> bronze Parquet. The **Matchbook conform layer** (spec 006) populates
+> `matchbook_event_link` from the fuzzy-matching conform engine. `football_data_match_link`
+> remains an empty scaffold until its own conform layer lands (resolving through the
+> same `canonical_match_id` identity).
 
 ---
 
@@ -106,6 +107,9 @@ erDiagram
         string link_id PK
         string match_id FK
         string matchbook_event_id
+        string match_method
+        double confidence
+        string review_status
     }
     FOOTBALL_DATA_MATCH_LINK {
         string link_id PK
@@ -229,14 +233,19 @@ columns exist now so that engine is purely additive.
 | `confidence` | `DOUBLE` | No | Linkage confidence. ESPN deterministic match: `1.0`. |
 | `review_status` | `VARCHAR` | No | Review state of the link. ESPN: always `'auto_confirmed'`. |
 
-### `matchbook_event_link` *(Physical Table Exists: `silver.matchbook_event_link` / `bronze.matchbook_event_link`)*
-Maps internal canonical matches to Matchbook exchange events for trading and odds ingestion.
+### `matchbook_event_link` *(Physical DuckLake Table Exists: `silver.matchbook_event_link`, populated by Spec 006)*
+Maps internal canonical matches to Matchbook exchange events via the fuzzy-matching
+conform layer (Spec 006). Populated by reading `data/silver/matchbook_resolved_links.parquet`
+which is written by the `matchbook_conform` Dagster asset.
 
 | Attribute | Type | Nullable | Description |
 | :--- | :--- | :--- | :--- |
-| `link_id` | `VARCHAR` | No (PK) | Primary key for the mapping record. |
-| `match_id` | `VARCHAR` | No (FK) | References canonical `match.match_id`. |
-| `matchbook_event_id` | `VARCHAR` | No | External event ID provided by the Matchbook API (`event_id`). |
+| `link_id` | `VARCHAR` | No (PK) | Deterministic surrogate `md5(matchbook_event_id)` — stable across re-runs. |
+| `match_id` | `VARCHAR` | No (FK) | References canonical `match.match_id` (includes `new_canonical` rows from conform). |
+| `matchbook_event_id` | `VARCHAR` | No | External event ID provided by the Matchbook API (provider reference, **not** a `match_id` input). |
+| `match_method` | `VARCHAR` | No | How the link was made: `'fuzzy_high'` \| `'fuzzy_medium'` \| `'human_override'`. |
+| `confidence` | `DOUBLE` | No | Linkage confidence: `0.95` (fuzzy_high), `0.75` (fuzzy_medium), `1.0` (human_override). |
+| `review_status` | `VARCHAR` | No | Review state: `'auto_confirmed'` \| `'needs_review'` \| `'human_confirmed'`. |
 
 ### `football_data_match_link` *(Physical DuckLake Table Exists: `silver.football_data_match_link`)*
 Maps internal canonical matches to source rows from **football-data.co.uk** (the

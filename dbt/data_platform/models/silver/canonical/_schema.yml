@@ -137,14 +137,46 @@ models:
                 values: ["auto_confirmed"]
 
   - name: matchbook_event_link
-    description: "Maps a canonical match to a Matchbook exchange event."
+    description: >
+      Maps a canonical match to a Matchbook exchange event. Populated by the
+      matchbook_conform Dagster asset via resolved-links Parquet (Spec 006).
+      Replaces the prior empty scaffold.
     columns:
       - name: link_id
+        description: "PK. Deterministic surrogate md5(matchbook_event_id) — stable across re-runs."
         data_tests:
           - not_null
           - unique
       - name: match_id
-        description: "FK -> match.match_id."
+        description: "FK -> match.match_id. Includes new_canonical rows minted by conform engine."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('match')
+                field: match_id
+      - name: matchbook_event_id
+        description: "Raw Matchbook event id (provider reference). One link per event."
+        data_tests:
+          - not_null
+          - unique
+      - name: match_method
+        description: "How the link was made."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["fuzzy_high", "fuzzy_medium", "human_override"]
+      - name: confidence
+        description: "Linkage confidence (DOUBLE). 0.95 high / 0.75 medium / 1.0 human."
+        data_tests:
+          - not_null
+      - name: review_status
+        description: "Review state of the link."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["auto_confirmed", "needs_review", "human_confirmed"]
 
   - name: football_data_match_link
     description: >

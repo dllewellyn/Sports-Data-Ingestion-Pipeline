@@ -32,6 +32,8 @@ class BronzeAwareTranslator(DagsterDbtTranslator):
     _SOURCE_ASSET_KEYS = {
         "users": AssetKey(["raw_users"]),
         "espn_events": AssetKey(["espn_bronze"]),
+        # matchbook_resolved_links is produced by the matchbook_conform Python asset (Spec 006)
+        "matchbook_resolved_links": AssetKey(["matchbook_conform"]),
     }
 
     def get_asset_key(self, dbt_resource_props: dict) -> AssetKey:

@@ -53,3 +53,24 @@ sources:
           - name: handicap_line
           - name: event_participant_id
           - name: kickoff_ms
+
+      - name: matchbook_resolved_links
+        description: "Resolved Matchbook event → canonical match links. Written by the matchbook_conform Dagster asset."
+        meta:
+          external_location: "{{ env_var('DATA_DIR', '/app/data') }}/silver/matchbook_resolved_links.parquet"
+        columns:
+          - name: matchbook_event_id
+          - name: match_id
+          - name: match_method
+          - name: confidence
+          - name: review_status
+
+      - name: matchbook_canonical_additions
+        description: "New canonical match rows minted by the conform asset for action='new_canonical' overrides."
+        meta:
+          external_location: "{{ env_var('DATA_DIR', '/app/data') }}/silver/matchbook_canonical_additions.parquet"
+
+      - name: matchbook_t60_enrichment
+        description: "T-60 minute favourite enrichment rows. Written by the matchbook_t60_enrichment Dagster asset."
+        meta:
+          external_location: "{{ env_var('DATA_DIR', '/app/data') }}/silver/matchbook_t60_enrichment.parquet"
