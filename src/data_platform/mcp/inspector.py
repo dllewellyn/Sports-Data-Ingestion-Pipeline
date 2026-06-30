@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+import duckdb
+
 from data_platform.config import settings as default_settings
 
 
@@ -103,3 +105,80 @@ class LakehouseInspector:
             "lakehouse_catalog": catalog,
             "status": status_msg,
         }
+
+    def get_dataset_schema(self, layer: str, name: str) -> dict[str, Any]:
+        """Inspect column schema merging dbt manifest metadata with physical Parquet types."""
+        manifest_cols, found_in_manifest = self._get_manifest_columns(layer, name)
+        parquet_path = self.data_dir / layer / f"{name}.parquet"
+
+        if not parquet_path.exists():
+            if not found_in_manifest:
+                return {"error": f"Dataset {name} in layer {layer} not found"}
+            columns = {
+                cname: {
+                    "manifest_type": cdata.get("data_type", "UNKNOWN"),
+                    "description": cdata.get("description", ""),
+                }
+                for cname, cdata in manifest_cols.items()
+            }
+            return {
+                "dataset": f"{layer}.{name}",
+                "materialized": False,
+                "status": f"Parquet file not yet materialized at {parquet_path}",
+                "columns": columns,
+            }
+
+        # Materialized: inspect via ephemeral in-memory DuckDB connection
+        physical_cols: dict[str, str] = {}
+        try:
+            conn = duckdb.connect(":memory:")
+            res = conn.execute(
+                "DESCRIBE SELECT * FROM read_parquet(?)", [str(parquet_path)]
+            ).fetchall()
+            for row in res:
+                col_name, col_type = row[0], row[1]
+                physical_cols[col_name] = col_type
+            conn.close()
+        except Exception as e:
+            return {"error": f"Failed to inspect Parquet file at {parquet_path}: {e}"}
+
+        columns = {}
+        all_col_names = list(physical_cols.keys()) + [
+            k for k in manifest_cols if k not in physical_cols
+        ]
+        for cname in all_col_names:
+            mcol = manifest_cols.get(cname, {})
+            columns[cname] = {
+                "physical_type": physical_cols.get(cname, "N/A"),
+                "description": mcol.get("description", ""),
+            }
+            if "data_type" in mcol:
+                columns[cname]["manifest_type"] = mcol.get("data_type", "")
+
+        return {
+            "dataset": f"{layer}.{name}",
+            "materialized": True,
+            "columns": columns,
+        }
+
+    def _get_manifest_columns(self, layer: str, name: str) -> tuple[dict[str, Any], bool]:
+        if not self.dbt_manifest_path.exists():
+            return {}, False
+
+        try:
+            with open(self.dbt_manifest_path, encoding="utf-8") as f:
+                manifest = json.load(f)
+        except Exception:
+            return {}, False
+
+        if layer == "bronze":
+            for src in manifest.get("sources", {}).values():
+                s_name = f"{src.get('source_name')}.{src.get('name')}"
+                if s_name == name or src.get("name") == name:
+                    return src.get("columns", {}), True
+        else:
+            for node in manifest.get("nodes", {}).values():
+                if node.get("resource_type") == "model" and node.get("name") == name:
+                    return node.get("columns", {}), True
+
+        return {}, False
