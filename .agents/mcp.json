@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "lakehouse-catalogue": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/Users/dllewellyn/Developer/Sports-Data-Ingestion-Pipeline",
+        "python",
+        "-m",
+        "data_platform.mcp"
+      ],
+      "env": {
+        "PYTHONPATH": "src"
+      }
+    }
+  }
+}

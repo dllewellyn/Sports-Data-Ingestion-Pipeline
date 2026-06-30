@@ -11,7 +11,7 @@ select
     espn_event_id,
     league_slug,
     cast(season_year as integer)            as season_year,
-    season_display,
+    json_extract_string(raw_event, '$.season.displayName') as season_display,
     coalesce(
         try_strptime(kickoff_time, '%Y-%m-%dT%H:%M:%SZ'),
         try_strptime(kickoff_time, '%Y-%m-%dT%H:%MZ')
@@ -26,3 +26,8 @@ select
     try_cast(home_score as integer)          as home_score,
     try_cast(away_score as integer)          as away_score
 from src
+qualify row_number() over (
+    partition by espn_event_id
+    order by ingested_at desc
+) = 1
+

@@ -29,7 +29,11 @@ T60_WINDOW_END_OFFSET_MS = 2_700_000  # 45 minutes before kickoff
 
 RUNNER_MATCH_THRESHOLD = 0.70
 
-MARKET_TYPE_MATCH_ODDS = "match_odds"
+# 1X2 market type — Matchbook sends this as "match_odds" but accept common variants
+# case-insensitively in case the string differs across API versions or ingestor versions.
+MARKET_TYPE_1X2_VARIANTS: frozenset[str] = frozenset(
+    {"match_odds", "1x2", "match_result", "win_draw_win"}
+)
 
 
 @dataclass
@@ -247,10 +251,12 @@ def run_t60_enrichment(
 
         kickoff_ms = pd.Timestamp(kickoff_time).value // 1_000_000  # ns -> ms
 
-        # Filter odds to match_odds market for this event
+        # Filter odds to the 1X2 (match odds) market for this event.
+        # Accept common variants case-insensitively in case the ingestor
+        # passes through a different string from Matchbook's API.
         event_odds = odds_df[
             (odds_df["event_id"].astype(str) == event_id)
-            & (odds_df["market_type"] == MARKET_TYPE_MATCH_ODDS)
+            & odds_df["market_type"].str.lower().isin(MARKET_TYPE_1X2_VARIANTS)
         ]
 
         if event_odds.empty:
