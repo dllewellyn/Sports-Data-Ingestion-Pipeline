@@ -38,12 +38,56 @@ seed_aliases as (
         array_agg(distinct alias) as similar_names
     from {{ ref('team_aliases') }}
     group by team_id
+),
+
+espn_teams as (
+    select
+        r.team_id,
+        r.name,
+        coalesce(a.similar_names, [r.name]) as similar_names
+    from resolved r
+    left join seed_aliases a
+        on r.team_id = a.team_id
+),
+
+-- Canonical teams minted by a provider's conform engine (action='new_canonical').
+-- read_parquet returns zero rows (not an error) when the file is absent (E11).
+matchbook_additions as (
+    select
+        cast(team_id as varchar)       as team_id,
+        cast(name as varchar)          as name,
+        cast(similar_names as varchar[]) as similar_names
+    from read_parquet(
+        '{{ env_var("DATA_DIR", "/app/data") }}/silver/matchbook_canonical_team_additions.parquet'
+    )
+),
+
+football_data_additions as (
+    select
+        cast(team_id as varchar)       as team_id,
+        cast(name as varchar)          as name,
+        cast(similar_names as varchar[]) as similar_names
+    from read_parquet(
+        '{{ env_var("DATA_DIR", "/app/data") }}/silver/football_data_canonical_team_additions.parquet'
+    )
+),
+
+combined as (
+    select team_id, name, similar_names, 0 as source_rank from espn_teams
+    union all
+    select team_id, name, similar_names, 1 as source_rank from matchbook_additions
+    union all
+    select team_id, name, similar_names, 1 as source_rank from football_data_additions
 )
 
+-- One row per canonical team_id. On a collision (same id from ESPN and a provider
+-- addition — only possible when they describe the same club), prefer the ESPN row.
 select
-    r.team_id,
-    r.name,
-    coalesce(a.similar_names, [r.name]) as similar_names
-from resolved r
-left join seed_aliases a
-    on r.team_id = a.team_id
+    team_id,
+    name,
+    similar_names
+from combined
+qualify row_number() over (
+    partition by team_id
+    order by source_rank
+) = 1

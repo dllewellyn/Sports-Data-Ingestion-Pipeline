@@ -16,12 +16,63 @@ with espn as (
         season_year,
         season_display
     from {{ ref('stg_espn_events') }}
+),
+
+espn_seasons as (
+    select
+        md5(md5(league_slug) || '|' || cast(season_year as varchar)) as season_id,
+        md5(league_slug)                                             as league_id,
+        season_display                                               as name,
+        cast(null as date)                                           as start_date,
+        cast(null as date)                                           as end_date
+    from espn
+),
+
+-- Canonical seasons minted by a provider's conform engine (action='new_canonical').
+-- read_parquet returns zero rows (not an error) when the file is absent (E11). Every
+-- addition row carries its non-null league_id so the int_season->int_league
+-- relationships test holds (E10).
+matchbook_additions as (
+    select
+        cast(season_id as varchar)  as season_id,
+        cast(league_id as varchar)  as league_id,
+        cast(name as varchar)       as name,
+        cast(start_date as date)    as start_date,
+        cast(end_date as date)      as end_date
+    from read_parquet(
+        '{{ env_var("DATA_DIR", "/app/data") }}/silver/matchbook_canonical_season_additions.parquet'
+    )
+),
+
+football_data_additions as (
+    select
+        cast(season_id as varchar)  as season_id,
+        cast(league_id as varchar)  as league_id,
+        cast(name as varchar)       as name,
+        cast(start_date as date)    as start_date,
+        cast(end_date as date)      as end_date
+    from read_parquet(
+        '{{ env_var("DATA_DIR", "/app/data") }}/silver/football_data_canonical_season_additions.parquet'
+    )
+),
+
+combined as (
+    select season_id, league_id, name, start_date, end_date, 0 as source_rank from espn_seasons
+    union all
+    select season_id, league_id, name, start_date, end_date, 1 as source_rank from matchbook_additions
+    union all
+    select season_id, league_id, name, start_date, end_date, 1 as source_rank from football_data_additions
 )
 
+-- One row per canonical season_id. On a collision, prefer the ESPN row.
 select
-    md5(md5(league_slug) || '|' || cast(season_year as varchar)) as season_id,
-    md5(league_slug)                                             as league_id,
-    season_display                                               as name,
-    cast(null as date)                                           as start_date,
-    cast(null as date)                                           as end_date
-from espn
+    season_id,
+    league_id,
+    name,
+    start_date,
+    end_date
+from combined
+qualify row_number() over (
+    partition by season_id
+    order by source_rank
+) = 1
