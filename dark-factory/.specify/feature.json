@@ -1,8 +1,8 @@
 {
-  "feature_directory": "specs/003-audit-trail-checks",
+  "feature_directory": "specs/012-cross-provider-conform",
   "telemetry": {
-    "run_id": "20260630T132155Z-cce4e3",
-    "trace_id": "b1cad74a990dbc9bd9570653d891aebb",
-    "started_at_ns": 1782825716175927000
+    "run_id": "20260701T183910Z-a08864",
+    "trace_id": "6aa73e04ae23212f639b5caf7c25f748",
+    "started_at_ns": 1782931150641897000
   }
 }
