@@ -2,14 +2,15 @@
 
 Links Matchbook bronze events to canonical (ESPN-derived) matches. Each event is
 either resolved (to a canonical ``match_id``) or sent to an exceptions queue for
-human review; human overrides can also mint a brand-new canonical match. The
-engine reads Parquet and writes three Parquet files — it never touches DuckLake
-(dbt owns the catalog).
+human review; human overrides can also mint a brand-new canonical match. A mint
+resolves the FULL season→league→team chain through the shared resolver + seeds
+and emits four additions frames (match/team/league/season). The engine reads
+Parquet and writes Parquet — it never touches DuckLake (dbt owns the catalog).
 """
 
 from __future__ import annotations
 
-import hashlib
+import contextlib
 import json
 import logging
 import tempfile
@@ -18,6 +19,12 @@ from pathlib import Path
 
 import pandas as pd
 
+from ..models.validation import (
+    league_additions_schema,
+    match_additions_schema,
+    season_additions_schema,
+    team_additions_schema,
+)
 from .matchbook_event_name import parse_event_name
 from .matchbook_overrides import load_overrides
 from .matchbook_scoring import (
@@ -29,11 +36,34 @@ from .matchbook_scoring import (
     _parse_start_utc,
     _score_candidate,
 )
-from .resolve import compute_canonical_match_id
+from .resolve import (
+    compute_canonical_match_id,
+    derive_season_id,
+    is_mintable_name,
+    resolve_league_id,
+    resolve_team_id,
+)
 
 logger = logging.getLogger(__name__)
 
 FOOTBALL_SPORT_ID = 15
+MATCHBOOK_PROVIDER = "matchbook"
+
+# Column orders for the four canonical-additions frames (data-model.md). An empty
+# frame is written with these columns so dbt's read_parquet finds the file typed.
+MATCH_ADDITION_COLUMNS = [
+    "match_id",
+    "season_id",
+    "home_team_id",
+    "away_team_id",
+    "kickoff_time",
+    "ht_score",
+    "ft_score",
+    "status_completed",
+]
+TEAM_ADDITION_COLUMNS = ["team_id", "name", "similar_names"]
+LEAGUE_ADDITION_COLUMNS = ["league_id", "name", "is_tournament"]
+SEASON_ADDITION_COLUMNS = ["season_id", "league_id", "name", "start_date", "end_date"]
 
 RESOLVED_COLUMNS = [
     "matchbook_event_id",
@@ -51,9 +81,6 @@ EXCEPTION_COLUMNS = [
     "unresolved_reason",
     "candidates",
 ]
-# Columns for the additions file when there are no rows to write; a populated
-# frame carries the full set of columns inferred from the addition row dicts.
-ADDITION_EMPTY_COLUMNS = ["match_id", "season_id", "home_team_id", "away_team_id", "kickoff_time"]
 
 
 @dataclass
@@ -66,12 +93,28 @@ class ConformReport:
 
 
 @dataclass
+class MintResult:
+    """The chain members a mint produced. Only UN-resolved members are carried.
+
+    ``exception`` is set instead of any addition when the parsed team names are
+    blank (E5) — in that case NO additions are emitted and the caller routes the
+    event to the exceptions queue.
+    """
+
+    match_addition: dict | None = None
+    team_additions: list[dict] = field(default_factory=list)
+    league_additions: list[dict] = field(default_factory=list)
+    season_additions: list[dict] = field(default_factory=list)
+    exception: dict | None = None
+
+
+@dataclass
 class _EventOutcome:
-    """The result of conforming a single event: at most one row of each kind."""
+    """The result of conforming a single event."""
 
     resolved: dict | None = None
     exception: dict | None = None
-    addition: dict | None = None
+    mint: MintResult | None = None
     override_applied: bool = False
 
 
@@ -82,13 +125,17 @@ def run_conform(
     exceptions_dir: Path,
     conform_dir: Path,
     additions_dir: Path,
+    team_aliases_path: Path | None = None,
+    league_aliases_path: Path | None = None,
     log: logging.Logger | None = None,
 ) -> ConformReport:
     """Run the Matchbook conform engine.
 
-    Reads bronze events, loads canonical match/team data, applies overrides,
-    then fuzzy-matches remaining events. Writes three output Parquet files
-    atomically: resolved-links, exceptions, and canonical additions.
+    Reads bronze events, loads canonical match/team/league/season data, applies
+    overrides, then fuzzy-matches remaining events. A ``new_canonical`` mint
+    resolves the full season→league→team chain through the shared resolver +
+    seeds and emits FOUR additions frames (match/team/league/season). Writes the
+    resolved-links, exceptions, and four additions Parquet files atomically.
     """
     log = log or logger
     report = ConformReport()
@@ -97,24 +144,64 @@ def run_conform(
     canonical_matches = _load_canonical_matches(canonical_dir)
     overrides_by_event = _index_overrides(overrides_path)
 
+    team_aliases_df = _load_seed(team_aliases_path, ["team_id", "canonical_name", "alias"])
+    league_aliases_df = _load_seed(
+        league_aliases_path, ["league_id", "canonical_name", "provider", "provider_key"]
+    )
+    existing_team_ids = _load_canonical_ids(canonical_dir / "team.parquet", "team_id")
+    existing_league_ids = _load_canonical_ids(canonical_dir / "league.parquet", "league_id")
+    existing_season_ids = _load_canonical_ids(canonical_dir / "season.parquet", "season_id")
+
     resolved_rows: list[dict] = []
     exception_rows: list[dict] = []
-    addition_rows: list[dict] = []
+    match_rows: list[dict] = []
+    team_rows: list[dict] = []
+    league_rows: list[dict] = []
+    season_rows: list[dict] = []
+    # Track ids emitted THIS run so two minted matches sharing a league/season/team
+    # don't emit duplicate additions (dbt keep-one is the backstop).
+    emitted_team_ids: set[str] = set()
+    emitted_league_ids: set[str] = set()
+    emitted_season_ids: set[str] = set()
+
     for _, event in events.iterrows():
-        outcome = _resolve_event(event, canonical_matches, overrides_by_event)
+        outcome = _resolve_event(
+            event,
+            canonical_matches,
+            overrides_by_event,
+            team_aliases_df,
+            league_aliases_df,
+            existing_team_ids | emitted_team_ids,
+            existing_league_ids | emitted_league_ids,
+            existing_season_ids | emitted_season_ids,
+        )
         if outcome.resolved is not None:
             resolved_rows.append(outcome.resolved)
         if outcome.exception is not None:
             exception_rows.append(outcome.exception)
-        if outcome.addition is not None:
-            addition_rows.append(outcome.addition)
         if outcome.override_applied:
             report.overrides_applied += 1
+        if outcome.mint is not None:
+            mint = outcome.mint
+            if mint.match_addition is not None:
+                match_rows.append(mint.match_addition)
+            for row in mint.team_additions:
+                team_rows.append(row)
+                emitted_team_ids.add(row["team_id"])
+            for row in mint.league_additions:
+                league_rows.append(row)
+                emitted_league_ids.add(row["league_id"])
+            for row in mint.season_additions:
+                season_rows.append(row)
+                emitted_season_ids.add(row["season_id"])
 
     _write_conform_outputs(
         resolved_rows,
         exception_rows,
-        addition_rows,
+        match_rows,
+        team_rows,
+        league_rows,
+        season_rows,
         conform_dir=conform_dir,
         exceptions_dir=exceptions_dir,
         additions_dir=additions_dir,
@@ -167,11 +254,33 @@ def _index_overrides(overrides_path: Path) -> dict[str, dict]:
     return {str(row["matchbook_event_id"]): row.to_dict() for _, row in overrides.iterrows()}
 
 
+def _load_seed(path: Path | None, columns: list[str]) -> pd.DataFrame:
+    """Read a seed CSV, or return an empty frame with the given columns if absent."""
+    if path is None or not path.exists():
+        return pd.DataFrame(columns=columns)
+    return pd.read_csv(path, dtype=str)
+
+
+def _load_canonical_ids(path: Path, column: str) -> set[str]:
+    """Read a canonical export Parquet's id column into a set, empty if absent."""
+    if not path.exists():
+        return set()
+    frame = pd.read_parquet(path, columns=[column])
+    return {str(v) for v in frame[column].dropna()}
+
+
 # ── Resolve one event ─────────────────────────────────────────────────────────
 
 
 def _resolve_event(
-    event: pd.Series, canonical_matches: list[dict], overrides_by_event: dict[str, dict]
+    event: pd.Series,
+    canonical_matches: list[dict],
+    overrides_by_event: dict[str, dict],
+    team_aliases_df: pd.DataFrame,
+    league_aliases_df: pd.DataFrame,
+    existing_team_ids: set[str],
+    existing_league_ids: set[str],
+    existing_season_ids: set[str],
 ) -> _EventOutcome:
     """Conform a single event: a human override wins, otherwise fuzzy-match."""
     event_id = str(event["event_id"])
@@ -179,30 +288,85 @@ def _resolve_event(
 
     override = overrides_by_event.get(event_id)
     if override is not None:
-        return _resolve_via_override(event_id, event_name, event, override)
+        return _resolve_via_override(
+            event_id,
+            event_name,
+            event,
+            override,
+            team_aliases_df,
+            league_aliases_df,
+            existing_team_ids,
+            existing_league_ids,
+            existing_season_ids,
+        )
 
     return _resolve_via_fuzzy(event_id, event_name, event, canonical_matches)
 
 
 def _resolve_via_override(
-    event_id: str, event_name: str, event: pd.Series, override: dict
+    event_id: str,
+    event_name: str,
+    event: pd.Series,
+    override: dict,
+    team_aliases_df: pd.DataFrame,
+    league_aliases_df: pd.DataFrame,
+    existing_team_ids: set[str],
+    existing_league_ids: set[str],
+    existing_season_ids: set[str],
 ) -> _EventOutcome:
     """Apply a human override. ``new_canonical`` mints and links a fresh match."""
+    if override.get("action") == "new_canonical":
+        match_id, mint = _mint_canonical_chain(
+            event_name,
+            event,
+            team_aliases_df,
+            league_aliases_df,
+            existing_league_ids,
+            existing_season_ids,
+            existing_team_ids,
+        )
+        if mint.exception is not None:
+            return _EventOutcome(exception=mint.exception, override_applied=True)
+        resolved = _link_row(event_id, match_id, "human_override", 1.0, "human_confirmed")
+        return _EventOutcome(resolved=resolved, mint=mint, override_applied=True)
+
     resolved = _link_row(
         event_id, override.get("match_id", ""), "human_override", 1.0, "human_confirmed"
     )
-    if override.get("action") == "new_canonical":
-        match_id, addition = _mint_canonical_addition(event_name, event)
-        resolved["match_id"] = match_id
-        return _EventOutcome(resolved=resolved, addition=addition, override_applied=True)
     return _EventOutcome(resolved=resolved, override_applied=True)
 
 
-def _mint_canonical_addition(event_name: str, event: pd.Series) -> tuple[str, dict]:
-    """Mint a new canonical match from a Matchbook event with best-effort ids.
+def _matchbook_provider_key(event: pd.Series) -> str:
+    """Build the Matchbook league provider_key ``"<sport_id>|<category_id>"``.
 
-    Returns ``(match_id, addition_row)`` — the caller stamps the same match_id
-    onto the resolved link so the two stay in lock-step.
+    sport_id defaults to 15 (football); category_id comes from the ``raw_event``
+    JSON's ``category-id`` field, falling back to a top-level ``category_id`` or
+    ``"unknown"``. This is the key ``league_aliases`` maps onto the ESPN league id.
+    """
+    sport_id = event.get("sport_id", FOOTBALL_SPORT_ID)
+    category_id = event.get("category_id")
+    raw_event = event.get("raw_event")
+    if isinstance(raw_event, str) and raw_event:
+        with contextlib.suppress(ValueError, TypeError):
+            category_id = json.loads(raw_event).get("category-id", category_id)
+    return f"{sport_id}|{category_id if category_id else 'unknown'}"
+
+
+def _mint_canonical_chain(
+    event_name: str,
+    event: pd.Series,
+    team_aliases_df: pd.DataFrame,
+    league_aliases_df: pd.DataFrame,
+    existing_league_ids: set[str],
+    existing_season_ids: set[str],
+    existing_team_ids: set[str],
+) -> tuple[str | None, MintResult]:
+    """Mint a canonical match plus its full season→league→team chain.
+
+    Resolves every id through the shared resolver + seeds (ESPN-anchored dedup for
+    a mapped league; provider-scoped mint otherwise). Emits a chain-member addition
+    only for members NOT already canonical (``existing_*_ids``). A blank/unparseable
+    team name (E5) returns ``(None, MintResult(exception=...))`` with no additions.
     """
     parsed = parse_event_name(event_name)
     home_parsed, away_parsed = parsed if parsed else (event_name, "")
@@ -210,28 +374,62 @@ def _mint_canonical_addition(event_name: str, event: pd.Series) -> tuple[str, di
     start_utc_str = str(event.get("start_utc", ""))
     start_dt = _parse_start_utc(start_utc_str)
     date_str = start_dt.strftime("%Y-%m-%d") if start_dt else "unknown"
-
-    league_id = hashlib.md5(b"matchbook_football").hexdigest()
     year = start_dt.year if start_dt else 2026
-    season_id = hashlib.md5(f"{league_id}|{year}".encode()).hexdigest()
-    home_team_id = hashlib.md5(home_parsed.lower().encode()).hexdigest()
-    away_team_id = hashlib.md5(away_parsed.lower().encode()).hexdigest()
 
+    if not is_mintable_name(home_parsed) or not is_mintable_name(away_parsed):
+        exception = _exception_row(
+            str(event["event_id"]),
+            event_name,
+            home_parsed or None,
+            away_parsed or None,
+            start_utc_str,
+            "blank_team_name",
+            "[]",
+        )
+        return None, MintResult(exception=exception)
+
+    provider_key = _matchbook_provider_key(event)
+    league_id = resolve_league_id(MATCHBOOK_PROVIDER, provider_key, league_aliases_df)
+    season_id = derive_season_id(league_id, year)
+    home_team_id = resolve_team_id(home_parsed, team_aliases_df)
+    away_team_id = resolve_team_id(away_parsed, team_aliases_df)
     match_id = compute_canonical_match_id(
         league_id, season_id, date_str, home_team_id, away_team_id
     )
-    addition = {
-        "match_id": match_id,
-        "season_id": season_id,
-        "home_team_id": home_team_id,
-        "away_team_id": away_team_id,
-        "favourite_team_id": None,
-        "kickoff_time": start_utc_str or None,
-        "ht_score": None,
-        "ft_score": None,
-        "status_completed": False,
-    }
-    return match_id, addition
+
+    result = MintResult(
+        match_addition={
+            "match_id": match_id,
+            "season_id": season_id,
+            "home_team_id": home_team_id,
+            "away_team_id": away_team_id,
+            "kickoff_time": start_utc_str or None,
+            "ht_score": None,
+            "ft_score": None,
+            "status_completed": False,
+        }
+    )
+
+    for team_id, name in ((home_team_id, home_parsed), (away_team_id, away_parsed)):
+        if team_id not in existing_team_ids:
+            result.team_additions.append(
+                {"team_id": team_id, "name": name, "similar_names": [name]}
+            )
+    if league_id not in existing_league_ids:
+        result.league_additions.append(
+            {"league_id": league_id, "name": provider_key, "is_tournament": False}
+        )
+    if season_id not in existing_season_ids:
+        result.season_additions.append(
+            {
+                "season_id": season_id,
+                "league_id": league_id,
+                "name": str(year),
+                "start_date": None,
+                "end_date": None,
+            }
+        )
+    return match_id, result
 
 
 def _resolve_via_fuzzy(
@@ -376,7 +574,10 @@ def _candidates_json(candidates: list[dict]) -> str:
 def _write_conform_outputs(
     resolved_rows: list[dict],
     exception_rows: list[dict],
-    addition_rows: list[dict],
+    match_rows: list[dict],
+    team_rows: list[dict],
+    league_rows: list[dict],
+    season_rows: list[dict],
     *,
     conform_dir: Path,
     exceptions_dir: Path,
@@ -384,10 +585,11 @@ def _write_conform_outputs(
     report: ConformReport,
     log: logging.Logger,
 ) -> None:
-    """Write resolved-links, exceptions, and additions Parquet files atomically.
+    """Write resolved-links, exceptions, and the four additions files atomically.
 
-    All three files are always written (even empty) — ``int_match.sql`` reads the
-    additions file and requires it to exist.
+    Every file is always written (even empty) — the intermediate dbt models read
+    them via ``read_parquet`` and require them to exist. Each additions frame is
+    Pandera-validated before it is written (a blank team/league name raises).
     """
     resolved_df = pd.DataFrame(resolved_rows, columns=RESOLVED_COLUMNS)
     _write_parquet_atomic(resolved_df, conform_dir / "matchbook_resolved_links.parquet")
@@ -397,23 +599,43 @@ def _write_conform_outputs(
     _write_parquet_atomic(exceptions_df, exceptions_dir / "matchbook_unresolved.parquet")
     report.exceptions_count = len(exceptions_df)
 
-    additions_df = (
-        pd.DataFrame(addition_rows)
-        if addition_rows
-        else pd.DataFrame(columns=ADDITION_EMPTY_COLUMNS)
-    )
-    _write_parquet_atomic(
-        additions_df, additions_dir / "matchbook_canonical_match_additions.parquet"
-    )
-    report.additions_count = len(additions_df)
+    match_df = _validated_frame(match_rows, MATCH_ADDITION_COLUMNS, match_additions_schema)
+    _write_parquet_atomic(match_df, additions_dir / "matchbook_canonical_match_additions.parquet")
+    report.additions_count = len(match_df)
+
+    team_df = _validated_frame(team_rows, TEAM_ADDITION_COLUMNS, team_additions_schema)
+    _write_parquet_atomic(team_df, additions_dir / "matchbook_canonical_team_additions.parquet")
+
+    league_df = _validated_frame(league_rows, LEAGUE_ADDITION_COLUMNS, league_additions_schema)
+    _write_parquet_atomic(league_df, additions_dir / "matchbook_canonical_league_additions.parquet")
+
+    season_df = _validated_frame(season_rows, SEASON_ADDITION_COLUMNS, season_additions_schema)
+    _write_parquet_atomic(season_df, additions_dir / "matchbook_canonical_season_additions.parquet")
 
     log.info(
-        "conform: resolved=%d, exceptions=%d, overrides=%d, additions=%d",
+        "conform: resolved=%d, exceptions=%d, overrides=%d, additions=%d "
+        "(team=%d, league=%d, season=%d)",
         report.resolved_count,
         report.exceptions_count,
         report.overrides_applied,
         report.additions_count,
+        len(team_df),
+        len(league_df),
+        len(season_df),
     )
+
+
+def _validated_frame(rows: list[dict], columns: list[str], schema) -> pd.DataFrame:
+    """Build a column-ordered frame and validate it against its Pandera schema.
+
+    An empty frame carries the declared columns so dbt's ``read_parquet`` finds a
+    typed file; a populated frame is Pandera-validated (rejecting e.g. a blank
+    team/league name) before it is written.
+    """
+    frame = pd.DataFrame(rows, columns=columns)
+    if frame.empty:
+        return frame
+    return schema.validate(frame)
 
 
 def _write_parquet_atomic(df: pd.DataFrame, path: Path) -> None:

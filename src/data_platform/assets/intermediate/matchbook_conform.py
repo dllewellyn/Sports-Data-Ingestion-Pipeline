@@ -41,11 +41,34 @@ def _ensure_empty_parquet(path, columns: list[str]) -> None:
 )
 def matchbook_conform(context) -> MaterializeResult:
     """Run the Matchbook conform engine and write silver-layer Parquet outputs."""
-    # Bootstrap: ensure both Parquet files that match.sql reads via read_parquet() exist
-    # before the dbt silver models run (even if conform/t60 have not produced real data yet).
+    # Bootstrap: ensure every Parquet file the dbt intermediate models read via
+    # read_parquet() exists before they run (even if conform/t60 have not produced
+    # real data yet). The mint path emits four canonical-additions frames.
+    additions_dir = settings.matchbook_canonical_additions_dir
     _ensure_empty_parquet(
-        settings.matchbook_canonical_additions_dir / "matchbook_canonical_match_additions.parquet",
-        columns=["match_id", "season_id", "home_team_id", "away_team_id", "kickoff_time"],
+        additions_dir / "matchbook_canonical_match_additions.parquet",
+        columns=[
+            "match_id",
+            "season_id",
+            "home_team_id",
+            "away_team_id",
+            "kickoff_time",
+            "ht_score",
+            "ft_score",
+            "status_completed",
+        ],
+    )
+    _ensure_empty_parquet(
+        additions_dir / "matchbook_canonical_team_additions.parquet",
+        columns=["team_id", "name", "similar_names"],
+    )
+    _ensure_empty_parquet(
+        additions_dir / "matchbook_canonical_league_additions.parquet",
+        columns=["league_id", "name", "is_tournament"],
+    )
+    _ensure_empty_parquet(
+        additions_dir / "matchbook_canonical_season_additions.parquet",
+        columns=["season_id", "league_id", "name", "start_date", "end_date"],
     )
     _ensure_empty_parquet(
         settings.matchbook_t60_dir / "matchbook_t60_enrichment.parquet",
@@ -61,6 +84,8 @@ def matchbook_conform(context) -> MaterializeResult:
             exceptions_dir=settings.matchbook_exceptions_dir,
             conform_dir=settings.matchbook_conform_dir,
             additions_dir=settings.matchbook_canonical_additions_dir,
+            team_aliases_path=settings.team_aliases_seed_path,
+            league_aliases_path=settings.league_aliases_seed_path,
             log=context.log,
         )
     context.log.info(

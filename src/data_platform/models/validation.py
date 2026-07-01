@@ -92,3 +92,61 @@ matchbook_events_bronze_schema = pa.DataFrameSchema(
     strict=False,
     coerce=True,
 )
+
+
+# --- Matchbook canonical-addition frame contracts (Spec 011, US1) --------------
+# The Matchbook mint path emits FOUR additions frames (match/team/league/season)
+# that dbt unions into the canonical models. Each frame is STRICT (`strict=True`):
+# every column is declared and no extra columns are allowed. The `team` and
+# `league` schemas enforce a non-blank `name` (a blank name would corrupt the
+# canonical model and break the season→league / link relationships tests) via a
+# `str_matches` check that rejects empty/whitespace-only strings.
+
+_NON_BLANK = pa.Check.str_matches(r"\S")
+
+match_additions_schema = pa.DataFrameSchema(
+    {
+        "match_id": pa.Column(str, nullable=False),
+        "season_id": pa.Column(str, nullable=False),
+        "home_team_id": pa.Column(str, nullable=False),
+        "away_team_id": pa.Column(str, nullable=False),
+        "kickoff_time": pa.Column(str, nullable=True),
+        "ht_score": pa.Column(str, nullable=True),
+        "ft_score": pa.Column(str, nullable=True),
+        "status_completed": pa.Column(bool, nullable=False, coerce=True),
+    },
+    strict=True,
+    coerce=True,
+)
+
+team_additions_schema = pa.DataFrameSchema(
+    {
+        "team_id": pa.Column(str, nullable=False),
+        "name": pa.Column(str, _NON_BLANK, nullable=False),
+        "similar_names": pa.Column(object, nullable=False),
+    },
+    strict=True,
+    coerce=True,
+)
+
+league_additions_schema = pa.DataFrameSchema(
+    {
+        "league_id": pa.Column(str, nullable=False),
+        "name": pa.Column(str, _NON_BLANK, nullable=False),
+        "is_tournament": pa.Column(bool, nullable=False, coerce=True),
+    },
+    strict=True,
+    coerce=True,
+)
+
+season_additions_schema = pa.DataFrameSchema(
+    {
+        "season_id": pa.Column(str, nullable=False),
+        "league_id": pa.Column(str, nullable=False),
+        "name": pa.Column(str, nullable=False),
+        "start_date": pa.Column(str, nullable=True),
+        "end_date": pa.Column(str, nullable=True),
+    },
+    strict=True,
+    coerce=True,
+)

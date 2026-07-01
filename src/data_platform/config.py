@@ -128,5 +128,15 @@ class Settings(BaseSettings):
         """T-60 enrichment Parquet dir (matchbook_t60_enrichment.parquet)."""
         return self.silver_dir
 
+    @property
+    def team_aliases_seed_path(self) -> Path:
+        """dbt team_aliases seed CSV (team_id, canonical_name, alias) the mint reads."""
+        return Path("dbt/data_platform/seeds/team_aliases.csv")
+
+    @property
+    def league_aliases_seed_path(self) -> Path:
+        """dbt league_aliases seed CSV (league_id, canonical_name, provider, provider_key)."""
+        return Path("dbt/data_platform/seeds/league_aliases.csv")
+
 
 settings = Settings()

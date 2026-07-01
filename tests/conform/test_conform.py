@@ -496,7 +496,7 @@ def test_new_canonical_writes_additions(tmp_path: Path) -> None:
     events = [
         {
             "event_id": "900",
-            "event_name": "New FC v Fresh United",
+            "event_name": "New FC vs Fresh United",
             "start_utc": "2026-08-10T15:00:00Z",
             "sport_id": 15,
             "ingested_at": 1,
