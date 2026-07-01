@@ -8,7 +8,7 @@ import pandas as pd
 from dagster import AssetKey, MaterializeResult, asset
 
 from ...config import settings
-from ...matchbook.conform import run_conform
+from ...conform import run_conform
 from ...otel import get_tracer
 
 

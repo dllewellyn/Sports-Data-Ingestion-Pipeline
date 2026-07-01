@@ -4,7 +4,11 @@ from pathlib import Path
 
 import pandas as pd
 
-from data_platform.matchbook.conform import (
+# The engine relocated from data_platform.matchbook.conform to the neutral
+# data_platform.conform package (T009). These end-to-end assertions over
+# run_conform (resolved / exceptions / additions outputs) are unchanged from the
+# pre-move suite, so their continued passing IS the output-equivalence guarantee.
+from data_platform.conform.matchbook import (
     HIGH_CONFIDENCE,
     MEDIUM_CONFIDENCE,
     compute_canonical_match_id,

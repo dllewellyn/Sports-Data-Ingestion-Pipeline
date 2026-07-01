@@ -18,9 +18,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from .event_name import parse_event_name
-from .overrides import load_overrides
-from .scoring import (
+from .matchbook_event_name import parse_event_name
+from .matchbook_overrides import load_overrides
+from .matchbook_scoring import (
     HIGH_CONFIDENCE,
     HIGH_THRESHOLD,
     KICKOFF_TOLERANCE_MINUTES,
@@ -29,6 +29,7 @@ from .scoring import (
     _parse_start_utc,
     _score_candidate,
 )
+from .resolve import compute_canonical_match_id
 
 logger = logging.getLogger(__name__)
 
@@ -72,17 +73,6 @@ class _EventOutcome:
     exception: dict | None = None
     addition: dict | None = None
     override_applied: bool = False
-
-
-def compute_canonical_match_id(
-    league_id: str, season_id: str, date_str: str, home_team_id: str, away_team_id: str
-) -> str:
-    """Replicate the dbt canonical_match_id macro in Python.
-
-    md5(concat_ws('|', league_id, season_id, date, home, away))
-    """
-    key = "|".join([league_id, season_id, date_str, home_team_id, away_team_id])
-    return hashlib.md5(key.encode()).hexdigest()
 
 
 def run_conform(
