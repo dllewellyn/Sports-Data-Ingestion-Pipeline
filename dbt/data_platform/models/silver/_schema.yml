@@ -1,22 +1,6 @@
 version: 2
 
 models:
-  - name: stg_users
-    description: "Conformed user dimension source (silver)."
-    columns:
-      - name: user_id
-        description: "Surrogate-free natural key from the source system."
-        data_tests:
-          - not_null
-          - unique
-      - name: email
-        description: "Lower-cased email address."
-        data_tests:
-          - not_null
-      - name: city
-        data_tests:
-          - not_null
-
   - name: stg_espn_events
     description: "Typed ESPN events (one row per event) staged from bronze ESPN Parquet."
     columns:

@@ -5,11 +5,6 @@ sources:
     description: "Raw landed data (Parquet) produced by the Dagster ingest asset."
     schema: main
     tables:
-      - name: users
-        description: "Raw users, one row per source user record."
-        meta:
-          # dbt-duckdb reads this Parquet file directly as the source relation.
-          external_location: "{{ env_var('DATA_DIR', '/app/data') }}/bronze/users.parquet"
       - name: espn_events
         description: "Raw ESPN soccer events, one row per fetched event across all leagues/seasons."
         meta:

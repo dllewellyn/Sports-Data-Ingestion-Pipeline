@@ -1,13 +1,3 @@
 version: 2
 
 models:
-  - name: dim_users_by_city
-    description: "Count of users per city (gold aggregate)."
-    columns:
-      - name: city
-        data_tests:
-          - not_null
-          - unique
-      - name: user_count
-        data_tests:
-          - not_null

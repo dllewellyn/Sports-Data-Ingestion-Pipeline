@@ -14,9 +14,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # Source
-    api_base_url: str = "https://jsonplaceholder.typicode.com"
-
     # Matchbook Redis ingestion (odds ticks via pub/sub)
     matchbook_redis_host: str = "redis"
     matchbook_redis_port: int = 6379
@@ -73,10 +70,6 @@ class Settings(BaseSettings):
     @property
     def silver_dir(self) -> Path:
         return self.data_dir / "silver"
-
-    @property
-    def gold_dir(self) -> Path:
-        return self.data_dir / "gold"
 
     @property
     def matchbook_bronze_dir(self) -> Path:

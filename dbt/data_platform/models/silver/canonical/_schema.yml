@@ -203,3 +203,65 @@ models:
         description: "Raw source home team name."
       - name: away_team
         description: "Raw source away team name."
+
+  - name: espn_team_link
+    description: "Maps raw ESPN team references (ID and name) to canonical team_id."
+    columns:
+      - name: link_id
+        data_tests:
+          - not_null
+          - unique
+      - name: team_id
+        description: "FK -> team.team_id."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('team')
+                field: team_id
+      - name: espn_team_id
+        data_tests:
+          - not_null
+      - name: espn_team_name
+        data_tests:
+          - not_null
+
+  - name: espn_league_link
+    description: "Maps raw ESPN league slugs to canonical league_id."
+    columns:
+      - name: link_id
+        data_tests:
+          - not_null
+          - unique
+      - name: league_id
+        description: "FK -> league.league_id."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('league')
+                field: league_id
+      - name: espn_league_slug
+        data_tests:
+          - not_null
+
+  - name: matchbook_team_link
+    description: "Maps Matchbook parsed team names to canonical team_id."
+    columns:
+      - name: link_id
+        data_tests:
+          - not_null
+          - unique
+      - name: team_id
+        description: "FK -> team.team_id."
+      - name: matchbook_team_name
+        data_tests:
+          - not_null
+
+  - name: matchbook_league_link
+    description: "Maps Matchbook sport/category to canonical league_id."
+    columns:
+      - name: link_id
+        data_tests:
+          - not_null
+          - unique
+      - name: league_id
+        description: "FK -> league.league_id."
