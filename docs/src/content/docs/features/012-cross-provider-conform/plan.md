@@ -7,7 +7,7 @@ title: "Implementation Plan: Cross-Provider Conform — Symmetric Resolve-or-Min
 **Feature directory**: `specs/012-cross-provider-conform/`
 **Date**: 2026-07-01
 **Spec**: `spec.md`
-**Status**: Draft
+**Status**: Done
 
 ## Summary
 
