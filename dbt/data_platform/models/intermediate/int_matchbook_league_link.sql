@@ -13,8 +13,9 @@ resolved as (
 ),
 
 matches as (
-    select match_id, league_id
-    from {{ ref('int_match') }}
+    select m.match_id, s.league_id
+    from {{ ref('int_match') }} m
+    join {{ ref('int_season') }} s on m.season_id = s.season_id
 ),
 
 event_leagues as (

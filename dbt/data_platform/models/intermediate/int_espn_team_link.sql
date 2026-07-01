@@ -32,3 +32,4 @@ select
     match_method,
     cast(1.0 as double)                                as confidence
 from resolved
+qualify row_number() over (partition by espn_team_id order by match_method desc) = 1
