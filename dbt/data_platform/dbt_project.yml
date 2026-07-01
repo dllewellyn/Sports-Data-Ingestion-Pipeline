@@ -40,6 +40,16 @@ seeds:
         team_id: varchar
         canonical_name: varchar
         alias: varchar
+    league_aliases:
+      # Curated provider-league -> canonical league_id map: one row per
+      # (provider, provider_key). `league_id` is the md5 of the ESPN slug and is
+      # NOT unique (several providers map onto one id). Force varchar so the md5
+      # hex `league_id` is not misparsed.
+      +column_types:
+        league_id: varchar
+        canonical_name: varchar
+        provider: varchar
+        provider_key: varchar
 
 tests:
   data_platform:

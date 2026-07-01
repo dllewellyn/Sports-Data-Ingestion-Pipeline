@@ -1,0 +1,32 @@
+version: 2
+
+seeds:
+  - name: league_aliases
+    description: >
+      Curated seed mapping each provider's league key onto the ESPN-anchored
+      canonical `league_id`. One row per (provider, provider_key). Several
+      providers map onto the SAME `league_id` (that is the point — it is how a
+      Matchbook/football-data league is de-duped onto the same canonical
+      fixture), so `league_id` is intentionally NOT unique. The composite
+      (provider, provider_key) IS unique — enforced by the singular test
+      `assert_league_aliases_unique_provider_key`. `league_id` is the md5 of the
+      ESPN league slug (e.g. md5('eng.1')); this seed only RECORDS that identity,
+      it does not redefine it.
+    columns:
+      - name: league_id
+        description: "ESPN-anchored canonical league id (md5 of the ESPN slug). NOT unique — several providers map onto one id."
+        data_tests:
+          - not_null
+      - name: canonical_name
+        description: "Human-readable canonical league name."
+      - name: provider
+        description: "Source provider that owns `provider_key`."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["espn", "matchbook", "football_data"]
+      - name: provider_key
+        description: "The provider's own league key that resolves to `league_id`."
+        data_tests:
+          - not_null
