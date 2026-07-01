@@ -74,8 +74,8 @@
 **Goal**: Add the two missing Matchbook link-table FK relationships tests (Spec 010 OQ3), safely green once US1/US2 guarantee every referenced team/league exists.
 **Independent Test**: add the two `relationships` tests to `_intermediate.yml`; with US1/US2 in place they pass; an absent `team_id` makes the team-link test go red.
 
-- [ ] T025 [US4] [S9] Write the red mutation check: add the `relationships` block for `int_matchbook_team_link.team_id` → `int_team.team_id` to `_intermediate.yml`, introduce a Matchbook team-link row whose `team_id` is absent from `int_team`, run `dbt build --select int_matchbook_team_link` and confirm the test goes RED (proves it bites, U13), then remove the bad row.
-- [ ] T026 [US4] [S9] Add both `relationships` blocks to `_intermediate.yml` — `int_matchbook_team_link.team_id` → `int_team.team_id` and `int_matchbook_league_link.league_id` → `int_league.league_id` (matching the espn-link pattern at `:217-219`, `:238-241`) (U13, U14). Green: `dbt build --select int_matchbook_team_link int_matchbook_league_link` with US1/US2 in place. Depends on T024, T025.
+- [X] T025 [US4] [S9] Write the red mutation check: add the `relationships` block for `int_matchbook_team_link.team_id` → `int_team.team_id` to `_intermediate.yml`, introduce a Matchbook team-link row whose `team_id` is absent from `int_team`, run `dbt build --select int_matchbook_team_link` and confirm the test goes RED (proves it bites, U13), then remove the bad row.
+- [X] T026 [US4] [S9] Add both `relationships` blocks to `_intermediate.yml` — `int_matchbook_team_link.team_id` → `int_team.team_id` and `int_matchbook_league_link.league_id` → `int_league.league_id` (matching the espn-link pattern at `:217-219`, `:238-241`) (U13, U14). Green: `dbt build --select int_matchbook_team_link int_matchbook_league_link` with US1/US2 in place. Depends on T024, T025.
 
 **Checkpoint**: both Matchbook FK tests present and genuinely biting.
 

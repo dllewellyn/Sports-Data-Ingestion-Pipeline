@@ -252,6 +252,11 @@ models:
           - unique
       - name: team_id
         description: "FK -> int_team.team_id."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('int_team')
+                field: team_id
       - name: matchbook_team_name
         data_tests:
           - not_null
@@ -265,3 +270,8 @@ models:
           - unique
       - name: league_id
         description: "FK -> int_league.league_id."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('int_league')
+                field: league_id
