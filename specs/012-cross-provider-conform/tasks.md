@@ -89,6 +89,8 @@
 
 **Checkpoint**: football-data slots into the shared contract; zero rows; no error.
 
+- [X] T028b [US5] [S8-followup] FR-010 completeness (surfaced during T028 review): `int_match.sql` unioned only `matchbook_canonical_match_additions` — add the `football_data_canonical_match_additions.parquet` `read_parquet` UNION-ALL CTE (bootstrap-empty) so int_match unions football-data match additions symmetrically with int_team/league/season. Green: `dbt build --select int_match` stays green with football_data empty; no orphan path. Serial with int_match.sql (T024/T035).
+
 ## Phase 8: Polish & cross-cutting
 
 - [ ] T029 [S11] Write failing `tests/conform/test_parity.py` (red): for a fixture whose league is mapped in `league_aliases`, the Python-computed `match_id` == the dbt macro output recomputed from the canonical tables — fails if resolver and macro drift (U12, E2). Depends on T024.

@@ -85,10 +85,29 @@ canonical_additions as (
     )
 ),
 
+-- New canonical rows minted by the football-data conform engine (action='new_canonical').
+-- try_read_parquet returns zero rows (not an error) when the file is absent (E11).
+football_data_canonical_additions as (
+    select
+        match_id,
+        season_id,
+        home_team_id,
+        away_team_id,
+        kickoff_time,
+        cast(null as varchar) as ht_score,
+        cast(null as varchar) as ft_score,
+        false                 as status_completed
+    from read_parquet(
+        '{{ env_var("DATA_DIR", "/app/data") }}/silver/football_data_canonical_match_additions.parquet'
+    )
+),
+
 combined as (
     select * from espn_matches
     union all
     select * from canonical_additions
+    union all
+    select * from football_data_canonical_additions
 ),
 
 -- T-60 enrichment: favourite team from pre-match Matchbook odds.
