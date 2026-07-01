@@ -42,7 +42,7 @@ def matchbook_conform(context) -> MaterializeResult:
     # Bootstrap: ensure both Parquet files that match.sql reads via read_parquet() exist
     # before the dbt silver models run (even if conform/t60 have not produced real data yet).
     _ensure_empty_parquet(
-        settings.matchbook_canonical_additions_dir / "matchbook_canonical_additions.parquet",
+        settings.matchbook_canonical_additions_dir / "matchbook_canonical_match_additions.parquet",
         columns=["match_id", "season_id", "home_team_id", "away_team_id", "kickoff_time"],
     )
     _ensure_empty_parquet(

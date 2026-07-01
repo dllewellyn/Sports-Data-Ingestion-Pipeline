@@ -74,10 +74,10 @@ sources:
           - name: confidence
           - name: review_status
 
-      - name: matchbook_canonical_additions
+      - name: matchbook_canonical_match_additions
         description: "New canonical match rows minted by the conform asset for action='new_canonical' overrides."
         meta:
-          external_location: "{{ env_var('DATA_DIR', '/app/data') }}/silver/matchbook_canonical_additions.parquet"
+          external_location: "{{ env_var('DATA_DIR', '/app/data') }}/silver/matchbook_canonical_match_additions.parquet"
 
       - name: matchbook_t60_enrichment
         description: "T-60 minute favourite enrichment rows. Written by the matchbook_t60_enrichment Dagster asset."

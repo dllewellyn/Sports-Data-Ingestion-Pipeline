@@ -81,7 +81,7 @@ canonical_additions as (
         cast(null as varchar) as ft_score,
         false                 as status_completed
     from read_parquet(
-        '{{ env_var("DATA_DIR", "/app/data") }}/silver/matchbook_canonical_additions.parquet'
+        '{{ env_var("DATA_DIR", "/app/data") }}/silver/matchbook_canonical_match_additions.parquet'
     )
 ),
 

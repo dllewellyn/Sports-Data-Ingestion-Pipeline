@@ -402,7 +402,9 @@ def _write_conform_outputs(
         if addition_rows
         else pd.DataFrame(columns=ADDITION_EMPTY_COLUMNS)
     )
-    _write_parquet_atomic(additions_df, additions_dir / "matchbook_canonical_additions.parquet")
+    _write_parquet_atomic(
+        additions_df, additions_dir / "matchbook_canonical_match_additions.parquet"
+    )
     report.additions_count = len(additions_df)
 
     log.info(

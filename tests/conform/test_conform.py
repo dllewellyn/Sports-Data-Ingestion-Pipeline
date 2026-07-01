@@ -158,7 +158,7 @@ def _run_conform_with_dirs(
 
     resolved_path = conform_dir / "matchbook_resolved_links.parquet"
     exceptions_path = exceptions_dir / "matchbook_unresolved.parquet"
-    additions_path = additions_dir / "matchbook_canonical_additions.parquet"
+    additions_path = additions_dir / "matchbook_canonical_match_additions.parquet"
 
     resolved = pd.read_parquet(resolved_path) if resolved_path.exists() else pd.DataFrame()
     exceptions = pd.read_parquet(exceptions_path) if exceptions_path.exists() else pd.DataFrame()

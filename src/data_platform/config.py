@@ -110,7 +110,7 @@ class Settings(BaseSettings):
 
     @property
     def matchbook_canonical_additions_dir(self) -> Path:
-        """New-canonical additions Parquet dir (matchbook_canonical_additions.parquet)."""
+        """New-canonical additions Parquet dir (matchbook_canonical_match_additions.parquet)."""
         return self.silver_dir
 
     @property
