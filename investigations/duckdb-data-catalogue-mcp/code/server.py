@@ -9,9 +9,11 @@ Exposes the Medallion data pipeline (bronze -> silver -> gold) via MCP Resources
   - `run_sql_query(query: str)`: Execute custom read-only DuckDB SQL queries across datasets.
 """
 
+import contextlib
 import json
 from pathlib import Path
 from typing import Any
+
 import duckdb
 from fastmcp import FastMCP
 
@@ -31,7 +33,7 @@ def _load_catalog_metadata() -> dict[str, dict[str, Any]]:
     # 1. Parse dbt manifest if available
     if DBT_MANIFEST_PATH.exists():
         try:
-            with open(DBT_MANIFEST_PATH, "r", encoding="utf-8") as f:
+            with open(DBT_MANIFEST_PATH, encoding="utf-8") as f:
                 manifest = json.load(f)
 
             # Process sources (bronze layer)
@@ -42,7 +44,10 @@ def _load_catalog_metadata() -> dict[str, dict[str, Any]]:
                 desc = src.get("description", "")
                 ext_loc = src.get("meta", {}).get("external_location")
                 columns = {
-                    col_name: {"type": col_info.get("data_type", "UNKNOWN"), "description": col_info.get("description", "")}
+                    col_name: {
+                        "type": col_info.get("data_type", "UNKNOWN"),
+                        "description": col_info.get("description", ""),
+                    }
                     for col_name, col_info in src.get("columns", {}).items()
                 }
                 datasets[full_name] = {
@@ -63,7 +68,10 @@ def _load_catalog_metadata() -> dict[str, dict[str, Any]]:
                     desc = node.get("description", "")
                     mat = node.get("config", {}).get("materialized", "table")
                     columns = {
-                        col_name: {"type": col_info.get("data_type", "UNKNOWN"), "description": col_info.get("description", "")}
+                        col_name: {
+                            "type": col_info.get("data_type", "UNKNOWN"),
+                            "description": col_info.get("description", ""),
+                        }
                         for col_name, col_info in node.get("columns", {}).items()
                     }
                     datasets[name] = {
@@ -78,7 +86,13 @@ def _load_catalog_metadata() -> dict[str, dict[str, Any]]:
             datasets["_error"] = {"error": f"Failed to parse manifest: {e}"}
 
     # Also register our spike sample parquet if available for real querying
-    sample_parquet = PROJECT_ROOT / "investigations" / "football-data-co-uk-ingestion" / "evidence" / "spike2_bronze_sample.parquet"
+    sample_parquet = (
+        PROJECT_ROOT
+        / "investigations"
+        / "football-data-co-uk-ingestion"
+        / "evidence"
+        / "spike2_bronze_sample.parquet"
+    )
     if sample_parquet.exists():
         datasets["bronze.football_sample"] = {
             "layer": "bronze",
@@ -104,10 +118,8 @@ def _get_duckdb_conn() -> duckdb.DuckDBPyConnection:
                 path = PROJECT_ROOT / path
             if path.exists():
                 view_name = ds["name"].replace(".", "_")
-                try:
+                with contextlib.suppress(Exception):
                     con.execute(f"CREATE VIEW {view_name} AS SELECT * FROM read_parquet('{path}')")
-                except Exception:
-                    pass
     return con
 
 
@@ -116,15 +128,17 @@ def get_catalog() -> str:
     """Return complete index of all datasets available in the Medallion lakehouse."""
     datasets = _load_catalog_metadata()
     summary = []
-    for name, ds in datasets.items():
-        summary.append({
-            "layer": ds.get("layer"),
-            "name": ds.get("name"),
-            "description": ds.get("description"),
-            "columns_count": len(ds.get("columns", {})),
-            "schema_resource": f"lakehouse://dataset/{ds.get('layer')}/{ds.get('name')}/schema",
-            "sample_resource": f"lakehouse://dataset/{ds.get('layer')}/{ds.get('name')}/sample",
-        })
+    for _name, ds in datasets.items():
+        summary.append(
+            {
+                "layer": ds.get("layer"),
+                "name": ds.get("name"),
+                "description": ds.get("description"),
+                "columns_count": len(ds.get("columns", {})),
+                "schema_resource": f"lakehouse://dataset/{ds.get('layer')}/{ds.get('name')}/schema",
+                "sample_resource": f"lakehouse://dataset/{ds.get('layer')}/{ds.get('name')}/sample",
+            }
+        )
     return json.dumps({"lakehouse_catalog": summary}, indent=2)
 
 
@@ -135,7 +149,7 @@ def get_dataset_schema(layer: str, name: str) -> str:
     ds = datasets.get(name)
     if not ds:
         # Try finding by matching suffix if needed
-        for k, v in datasets.items():
+        for _k, v in datasets.items():
             if v.get("layer") == layer and v.get("name").endswith(name):
                 ds = v
                 break
@@ -162,12 +176,15 @@ def get_dataset_schema(layer: str, name: str) -> str:
             "description": col_meta.get("description", ""),
         }
 
-    return json.dumps({
-        "dataset": ds.get("name"),
-        "layer": ds.get("layer"),
-        "description": ds.get("description"),
-        "columns": columns_output,
-    }, indent=2)
+    return json.dumps(
+        {
+            "dataset": ds.get("name"),
+            "layer": ds.get("layer"),
+            "description": ds.get("description"),
+            "columns": columns_output,
+        },
+        indent=2,
+    )
 
 
 @mcp.resource("lakehouse://dataset/{layer}/{name}/sample")
@@ -181,14 +198,21 @@ def get_dataset_sample(layer: str, name: str) -> str:
     con = _get_duckdb_conn()
     view_name = ds["name"].replace(".", "_")
     try:
-        sample_rows = con.execute(f"SELECT * FROM {view_name} LIMIT 10").df().to_dict(orient="records")
-        return json.dumps({"dataset": ds.get("name"), "sample_rows": sample_rows}, indent=2, default=str)
+        sample_rows = (
+            con.execute(f"SELECT * FROM {view_name} LIMIT 10").df().to_dict(orient="records")
+        )
+        return json.dumps(
+            {"dataset": ds.get("name"), "sample_rows": sample_rows}, indent=2, default=str
+        )
     except Exception as e:
-        return json.dumps({
-            "dataset": ds.get("name"),
-            "status": "Sample unavailable (raw Parquet file not currently landed locally or view not materialized)",
-            "detail": str(e),
-        }, indent=2)
+        return json.dumps(
+            {
+                "dataset": ds.get("name"),
+                "status": "Sample unavailable (no local parquet or view)",
+                "detail": str(e),
+            },
+            indent=2,
+        )
 
 
 @mcp.tool()
@@ -198,14 +222,20 @@ def run_sql_query(query: str) -> str:
     try:
         # Restrict mutations basic check
         upper_query = query.strip().upper()
-        if any(upper_query.startswith(cmd) for cmd in ["INSERT", "UPDATE", "DELETE", "DROP", "ALTER"]):
+        if any(
+            upper_query.startswith(cmd) for cmd in ["INSERT", "UPDATE", "DELETE", "DROP", "ALTER"]
+        ):
             return json.dumps({"error": "Only read-only SELECT queries are permitted."}, indent=2)
         df = con.execute(query).df()
-        return json.dumps({
-            "query": query,
-            "row_count": len(df),
-            "results": df.head(50).to_dict(orient="records"),
-        }, indent=2, default=str)
+        return json.dumps(
+            {
+                "query": query,
+                "row_count": len(df),
+                "results": df.head(50).to_dict(orient="records"),
+            },
+            indent=2,
+            default=str,
+        )
     except Exception as e:
         return json.dumps({"error": str(e)}, indent=2)
 

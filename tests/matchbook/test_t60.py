@@ -62,7 +62,6 @@ def test_filter_t60_ticks_empty_df() -> None:
 
 def test_filter_t60_ticks_datetime64_ms_utc() -> None:
     """Production Parquet stores ingested_at as datetime64[ms, UTC] — must normalise correctly."""
-    import datetime
 
     kickoff_ms = 1_000_000_000_000  # epoch-ms
     window_start_ms = kickoff_ms - 4_500_000

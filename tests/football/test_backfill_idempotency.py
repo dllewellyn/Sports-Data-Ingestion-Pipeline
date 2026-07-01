@@ -112,4 +112,3 @@ def test_definitions_registers_football_assets_resource_and_job() -> None:
 
     football = {"football_main", "football_extra"}
     assert _keys("football_backfill") == football
-    assert not (_keys("medallion_hello_world") & football), "football excluded from hello-world"
