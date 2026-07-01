@@ -1,8 +1,8 @@
 """Matchbook conform package — public surface."""
 
 from .engine import ConformReport, compute_canonical_match_id, run_conform
+from .event_name import parse_event_name
 from .overrides import load_overrides
-from .reversal import parse_event_name
 from .scoring import HIGH_CONFIDENCE, MEDIUM_CONFIDENCE
 
 __all__ = [
