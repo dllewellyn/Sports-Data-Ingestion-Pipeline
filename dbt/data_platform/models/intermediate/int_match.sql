@@ -25,7 +25,7 @@
 -- surrogate => re-running over a post-match scoreboard yields the SAME match_id with
 -- ft_score now populated (E4, E9).
 --
--- Scores (E11 — no fabrication): ESPN exposes full-time scores only.
+-- Scores (no fabrication): ESPN exposes full-time scores only.
 --   * ht_score is always NULL (not exposed by ESPN).
 --   * ft_score = the score columns only when the event is FINAL (status_completed),
 --     else NULL (a pre-match fixture has no result).
@@ -71,7 +71,7 @@ espn_matches as (
 
 -- New canonical rows minted by the Matchbook conform engine (action='new_canonical').
 -- read_parquet REQUIRES the file to exist (it errors if absent); the conform asset
--- bootstrap-writes it empty, so an un-minted Matchbook provider contributes zero rows (E11).
+-- bootstrap-writes it empty, so an un-minted Matchbook provider contributes zero rows.
 canonical_additions as (
     select
         match_id,
@@ -89,7 +89,7 @@ canonical_additions as (
 
 -- New canonical rows minted by the football-data conform engine (action='new_canonical').
 -- read_parquet REQUIRES the file to exist (it errors if absent); the conform asset
--- bootstrap-writes it empty, so an un-minted football-data provider contributes zero rows (E11).
+-- bootstrap-writes it empty, so an un-minted football-data provider contributes zero rows.
 football_data_canonical_additions as (
     select
         match_id,
@@ -115,7 +115,7 @@ combined as (
 
 -- T-60 enrichment: favourite team from pre-match Matchbook odds.
 -- read_parquet REQUIRES the file to exist (it errors if absent); the T-60 asset
--- bootstrap-writes it empty, so a match with no odds keeps favourite_team_id NULL (E11).
+-- bootstrap-writes it empty, so a match with no odds keeps favourite_team_id NULL.
 t60_enrichment as (
     select match_id, favourite_team_id
     from read_parquet(

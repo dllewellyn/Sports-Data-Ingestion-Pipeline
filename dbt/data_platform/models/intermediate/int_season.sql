@@ -29,7 +29,8 @@ espn_seasons as (
 ),
 
 -- Canonical seasons minted by a provider's conform engine (action='new_canonical').
--- read_parquet returns zero rows (not an error) when the file is absent (E11). Every
+-- read_parquet REQUIRES the file to exist (it errors if absent); the conform asset
+-- bootstrap-writes it empty, so an un-minted provider contributes zero rows. Every
 -- addition row carries its non-null league_id so the int_season->int_league
 -- relationships test holds (E10).
 matchbook_additions as (

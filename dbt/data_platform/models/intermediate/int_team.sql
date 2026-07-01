@@ -51,7 +51,8 @@ espn_teams as (
 ),
 
 -- Canonical teams minted by a provider's conform engine (action='new_canonical').
--- read_parquet returns zero rows (not an error) when the file is absent (E11).
+-- read_parquet REQUIRES the file to exist (it errors if absent); the conform asset
+-- bootstrap-writes it empty, so an un-minted provider contributes zero rows.
 matchbook_additions as (
     select
         cast(team_id as varchar)       as team_id,
