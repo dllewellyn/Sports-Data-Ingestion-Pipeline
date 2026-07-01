@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import pandera.pandas as pa
 
-
 # --- football-data.co.uk bronze frame contracts (D4, D5) -----------------------
 # These are deliberately OPEN (`strict=False`): they enforce only the mandatory
 # per-family core and let the wide, drift-prone optional odds/stat columns ride

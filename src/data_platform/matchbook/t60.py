@@ -32,7 +32,7 @@ RUNNER_MATCH_THRESHOLD = 0.70
 # 1X2 market type — Matchbook sends this as "match_odds" but accept common variants
 # case-insensitively in case the string differs across API versions or ingestor versions.
 MARKET_TYPE_1X2_VARIANTS: frozenset[str] = frozenset(
-    {"match_odds", "1x2", "match_result", "win_draw_win"}
+    {"match_odds", "1x2", "match_result", "win_draw_win", "one_x_two"}
 )
 
 
@@ -47,7 +47,8 @@ class T60Report:
 def filter_t60_ticks(ticks_df: pd.DataFrame, kickoff_ms: float) -> pd.DataFrame:
     """Filter ticks to the T-60 window [kickoff_ms - 4500000, kickoff_ms - 2700000].
 
-    Ticks with NULL kickoff_ms are excluded (E3). Returns the filtered DataFrame.
+    Ticks with NULL ingested_at are excluded. ingested_at may be integer epoch-ms
+    (test fixtures) or datetime64[ms, UTC] (production Parquet) — normalise to int ms.
     """
     if ticks_df.empty:
         return ticks_df
@@ -55,11 +56,15 @@ def filter_t60_ticks(ticks_df: pd.DataFrame, kickoff_ms: float) -> pd.DataFrame:
     window_start = kickoff_ms - T60_WINDOW_START_OFFSET_MS
     window_end = kickoff_ms - T60_WINDOW_END_OFFSET_MS
 
-    mask = (
-        ticks_df["ingested_at"].notna()
-        & (ticks_df["ingested_at"] >= window_start)
-        & (ticks_df["ingested_at"] <= window_end)
-    )
+    ingested_ms = ticks_df["ingested_at"]
+    if pd.api.types.is_datetime64_any_dtype(ingested_ms):
+        # Remove timezone if present (production Parquet uses datetime64[ms, UTC])
+        if hasattr(ingested_ms.dtype, "tz") and ingested_ms.dtype.tz is not None:
+            ingested_ms = ingested_ms.dt.tz_convert("UTC").dt.tz_localize(None)
+        # Normalise to epoch-milliseconds regardless of original unit (ns, ms, us, s)
+        ingested_ms = ingested_ms.astype("datetime64[ms]").astype("int64")
+
+    mask = ingested_ms.notna() & (ingested_ms >= window_start) & (ingested_ms <= window_end)
     return ticks_df[mask].copy()
 
 
@@ -200,7 +205,22 @@ def run_t60_enrichment(
     events_df = pd.DataFrame()
     if event_files:
         events_df = pd.concat([pd.read_parquet(f) for f in event_files], ignore_index=True)
-        if "ingested_at" in events_df.columns:
+
+        # Prefer live-ingest rows (which have 'markets' in raw_event and therefore
+        # runner data) over migration rows — migration rows set ingested_at to the
+        # migration timestamp so they otherwise win the recency-based dedup.
+        def _has_markets(raw: object) -> bool:
+            if isinstance(raw, str):
+                return '"markets"' in raw
+            return isinstance(raw, dict) and "markets" in raw
+
+        if "raw_event" in events_df.columns:
+            events_df["_has_markets"] = events_df["raw_event"].map(_has_markets)
+            events_df = events_df.sort_values(
+                ["_has_markets", "ingested_at"], ascending=[False, False]
+            )
+            events_df = events_df.drop("_has_markets", axis=1)
+        elif "ingested_at" in events_df.columns:
             events_df = events_df.sort_values("ingested_at", ascending=False)
         events_df = events_df.drop_duplicates(subset=["event_id"], keep="first")
 
@@ -208,10 +228,29 @@ def run_t60_enrichment(
     if not events_df.empty:
         events_by_id = {str(row["event_id"]): row.to_dict() for _, row in events_df.iterrows()}
 
-    # ── Load odds Parquet ───────────────────────────────────────────────
-    odds_files = sorted(odds_dir.glob("**/*.parquet")) if odds_dir.exists() else []
-    if not odds_files:
-        log.warning("No odds Parquet files found in %s", odds_dir)
+    # ── Detect odds layout and build a date-based file loader ──────────────
+    # Production: partitioned as year=YYYY/month=MM/day=DD/part-*.parquet —
+    # load only the two day-partitions spanning the T-60 window to avoid OOM.
+    # Tests / flat layout: fall back to all Parquet files directly in odds_dir.
+    _is_partitioned = any(odds_dir.glob("year=*")) if odds_dir.exists() else False
+
+    def _odds_files_for_date(dt: pd.Timestamp) -> list[Path]:
+        if not _is_partitioned:
+            return []
+        day_dir = odds_dir / f"year={dt.year}" / f"month={dt.month:02d}" / f"day={dt.day:02d}"
+        return sorted(day_dir.glob("*.parquet")) if day_dir.exists() else []
+
+    _flat_odds_files: list[Path] = (
+        sorted(odds_dir.glob("**/*.parquet")) if not _is_partitioned and odds_dir.exists() else []
+    )
+    _flat_odds_df: pd.DataFrame | None = (
+        pd.concat([pd.read_parquet(f) for f in _flat_odds_files], ignore_index=True)
+        if _flat_odds_files
+        else None
+    )
+
+    if not odds_dir.exists():
+        log.warning("No odds directory found at %s", odds_dir)
         _write_parquet_atomic(
             pd.DataFrame(
                 columns=[
@@ -228,8 +267,6 @@ def run_t60_enrichment(
             out_path,
         )
         return report
-
-    odds_df = pd.concat([pd.read_parquet(f) for f in odds_files], ignore_index=True)
 
     # ── Process each linked event ────────────────────────────────────────
     enrichment_rows: list[dict] = []
@@ -249,14 +286,32 @@ def run_t60_enrichment(
             report.skipped_no_ticks += 1
             continue
 
-        kickoff_ms = pd.Timestamp(kickoff_time).value // 1_000_000  # ns -> ms
+        kickoff_ts = pd.Timestamp(kickoff_time)
+        kickoff_ms = kickoff_ts.value // 1_000_000  # ns -> ms
+
+        # Load only the odds files from the day of (and day before) kickoff —
+        # the T-60 window spans up to 75 min before kickoff, which may cross midnight.
+        # Falls back to the pre-loaded flat DataFrame for non-partitioned layouts (tests).
+        if _is_partitioned:
+            day_files = _odds_files_for_date(kickoff_ts)
+            prev_files = _odds_files_for_date(kickoff_ts - pd.Timedelta(days=1))
+            relevant_files = prev_files + day_files
+            if not relevant_files:
+                report.skipped_no_ticks += 1
+                continue
+            day_odds = pd.concat([pd.read_parquet(f) for f in relevant_files], ignore_index=True)
+        elif _flat_odds_df is not None:
+            day_odds = _flat_odds_df
+        else:
+            report.skipped_no_ticks += 1
+            continue
 
         # Filter odds to the 1X2 (match odds) market for this event.
         # Accept common variants case-insensitively in case the ingestor
         # passes through a different string from Matchbook's API.
-        event_odds = odds_df[
-            (odds_df["event_id"].astype(str) == event_id)
-            & odds_df["market_type"].str.lower().isin(MARKET_TYPE_1X2_VARIANTS)
+        event_odds = day_odds[
+            (day_odds["event_id"].astype(str) == event_id)
+            & day_odds["market_type"].str.lower().isin(MARKET_TYPE_1X2_VARIANTS)
         ]
 
         if event_odds.empty:
@@ -300,7 +355,15 @@ def run_t60_enrichment(
             else:
                 raw_event_dict = raw_event or {}
 
+            # Runners may be at top level (some API formats) or nested inside
+            # the one_x_two market (live ingest format from Matchbook API).
             runners = raw_event_dict.get("runners", [])
+            if not runners:
+                for market in raw_event_dict.get("markets", []):
+                    if market.get("market-type", "").lower() in MARKET_TYPE_1X2_VARIANTS:
+                        runners = market.get("runners", [])
+                        # Normalise runner dicts: live format uses "id"/"name", same as expected
+                        break
             home_team_name = str(match_data.get("home_team_name", ""))
             away_team_name = str(match_data.get("away_team_name", ""))
 

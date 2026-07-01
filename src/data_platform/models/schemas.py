@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import math
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 def _missing(v: object) -> bool:
@@ -240,10 +240,6 @@ class MatchbookOddsRecord(BaseModel):
 
 
 __all__ = [
-    "User",
-    "Address",
-    "Company",
-    "Geo",
     "MainMatchRecord",
     "ExtraMatchRecord",
     "EspnEventRecord",

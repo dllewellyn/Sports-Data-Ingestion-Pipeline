@@ -31,9 +31,9 @@ configure_telemetry()
 # Football bronze assets: separate, on-demand source (full backfill is ~705 files).
 football_assets = AssetSelection.assets(football_main, football_extra)
 
-# ESPN soccer flow: end-to-end source (bronze scoreboards -> dbt silver staging + 
-# canonical conform + link models). Run via the dedicated `espn_job`. The dbt model 
-# AssetKeys are `["silver","<model>"]` (verified from the manifest; NOT 
+# ESPN soccer flow: end-to-end source (bronze scoreboards -> dbt silver staging +
+# canonical conform + link models). Run via the dedicated `espn_job`. The dbt model
+# AssetKeys are `["silver","<model>"]` (verified from the manifest; NOT
 # `["silver","canonical",...]`); the `team_aliases` seed is an ESPN-conform input and
 # surfaces as `["silver","team_aliases"]`, so it rides with this source.
 espn_assets = AssetSelection.assets(
@@ -74,8 +74,8 @@ football_backfill_job = define_asset_job(
     description="Backfill football-data.co.uk main + extra bronze Parquet over the registry.",
 )
 
-# ESPN runs end-to-end on a cadence: the bronze scoreboard ingest plus the dbt staging 
-# + canonical conform + link models, so each run lands fresh scoreboards AND re-derives 
+# ESPN runs end-to-end on a cadence: the bronze scoreboard ingest plus the dbt staging
+# + canonical conform + link models, so each run lands fresh scoreboards AND re-derives
 # the canonical match/link rows. Every 6 hours.
 espn_job = define_asset_job(
     name="espn_ingestion",
@@ -102,7 +102,7 @@ matchbook_events_schedule = ScheduleDefinition(
     cron_schedule="0 */6 * * *",
 )
 
-# Matchbook conform job: runs 1 hour after matchbook_events_ingestion so the bronze lake 
+# Matchbook conform job: runs 1 hour after matchbook_events_ingestion so the bronze lake
 # is fresh before conform runs.
 matchbook_conform_job = define_asset_job(
     name="matchbook_conform_job",

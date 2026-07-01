@@ -1,18 +1,19 @@
 import json
 from pathlib import Path
 
+
 def inspect_manifest(manifest_path: Path):
     if not manifest_path.exists():
         print(f"Manifest not found at {manifest_path}")
         return
-    with open(manifest_path, "r") as f:
+    with open(manifest_path) as f:
         data = json.load(f)
-    
+
     print(f"Schema version: {data.get('metadata', {}).get('dbt_schema_version')}")
-    
+
     sources = data.get("sources", {})
     print(f"\n--- Sources ({len(sources)}) ---")
-    for src_id, src in sources.items():
+    for _src_id, src in sources.items():
         name = f"{src['source_name']}.{src['name']}"
         desc = src.get("description", "No description")
         ext_loc = src.get("meta", {}).get("external_location", "N/A")
@@ -21,8 +22,8 @@ def inspect_manifest(manifest_path: Path):
         print(f"  Desc: {desc}")
 
     models = data.get("nodes", {})
-    print(f"\n--- Models ---")
-    for node_id, node in models.items():
+    print("\n--- Models ---")
+    for _node_id, node in models.items():
         if node.get("resource_type") == "model":
             name = node.get("name")
             config_mat = node.get("config", {}).get("materialized")
@@ -31,6 +32,9 @@ def inspect_manifest(manifest_path: Path):
             print(f"Model: {name} ({config_mat}) | Cols: {len(columns)}")
             print(f"  Desc: {desc}")
 
+
 if __name__ == "__main__":
-    manifest = Path(__file__).resolve().parents[3] / "dbt" / "data_platform" / "target" / "manifest.json"
+    manifest = (
+        Path(__file__).resolve().parents[3] / "dbt" / "data_platform" / "target" / "manifest.json"
+    )
     inspect_manifest(manifest)
