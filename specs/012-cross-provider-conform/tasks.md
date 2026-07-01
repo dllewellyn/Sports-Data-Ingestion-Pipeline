@@ -93,7 +93,7 @@
 
 ## Phase 8: Polish & cross-cutting
 
-- [ ] T029 [S11] Write failing `tests/conform/test_parity.py` (red): for a fixture whose league is mapped in `league_aliases`, the Python-computed `match_id` == the dbt macro output recomputed from the canonical tables — fails if resolver and macro drift (U12, E2). Depends on T024.
+- [X] T029 [S11] Write failing `tests/conform/test_parity.py` (red): for a fixture whose league is mapped in `league_aliases`, the Python-computed `match_id` == the dbt macro output recomputed from the canonical tables — fails if resolver and macro drift (U12, E2). Depends on T024.
 - [ ] T030 [S11] Cross-provider de-dup + full-run parity verification: run `dagster job execute -j matchbook_conform_job` (queued/daemon path — no `DagsterCodeLocationNotFoundError`) to completion; `dbt build` over intermediate+marts green; `int_match` has exactly ONE row for the shared fixture (keep-one); parity test green (U12, U17). No new product code. Depends on T028, T029.
 - [ ] T031 [S12] Write the docs red state: after planning the edits, run `grep -rn "try_read_parquet\|conform lives in matchbook\|canonical.*ESPN-only\|models/silver/canonical" CLAUDE.md ARCHITECTURE.md ERD.md "data flows.md" dbt/data_platform/models/intermediate/int_match.sql` and record every stale hit that must be removed (U19). Fails (stale text present) before edits.
 - [ ] T032 [P] [US1] [S12] Ripple `ARCHITECTURE.md`: describe conform as a symmetric cross-provider layer in `src/data_platform/conform/`, the four additions files, and correct any `models/silver/canonical/` → `models/intermediate/` staleness. `[P]` with T033, T034 (disjoint doc files). Depends on T030.
