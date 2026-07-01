@@ -55,7 +55,7 @@ by **pytest** under `tests/` (see the `pytest` command above).
 >
 > The relational **data model** (canonical entities + provider linking tables) is
 > documented in [`ERD.md`](ERD.md) — it is living documentation: when you add or
-> change a canonical/link table (or a dbt model under `models/silver/canonical/`),
+> change a canonical/link table (or a dbt model under `models/intermediate/int_*`),
 > update `ERD.md` in the same commit. Note `ERD.md` was ported from the upstream
 > Postgres gaming-engine; this repo materializes that model in DuckLake (see the
 > storage-engine note in `ERD.md` and the constraint below).
@@ -88,31 +88,33 @@ raw_users ──▶ silver/stg_users ──▶ gold/dim_users_by_city ──▶ 
 - **`dbt-duckdb` does NOT need `is_ducklake: true` for a PostgreSQL-backed DuckLake path.** `path: "ducklake:postgres:dbname=..."` is sufficient for `dbt-duckdb 1.10.1`+; `is_ducklake: true` is only needed for MotherDuck paths.
 - **`dbt parse` exits 0 even without a live Postgres catalog connection.** Parse only reads model SQL to generate the manifest; it does not connect to the catalog. Safe to run in CI without the DuckLake catalog service standing up.
 - **DuckDB runtime >=1.5.2 required for the DuckLake 1.0 extension.** The Python package in `pyproject.toml` is pinned `>=1.5.2`.
-- **The canonical domain schema lives as dbt models, not raw DDL.** `team`,
-  `league`, `match`, and the `*_match_link`/`*_event_link` tables are dbt models
-  under `dbt/data_platform/models/silver/canonical/`. The **ESPN conform layer**
-  (spec 002) populates `league`/`season`/`team`/`match`/`espn_match_link` from the
-  ESPN bronze Parquet; `matchbook_event_link` and `football_data_match_link` remain
-  typed **empty** scaffolds (`select cast(null …) … limit 0`, `+materialized: table`)
-  until their own conform layers land. Don't create/alter them with a raw DuckDB
-  connection — that reintroduces the second-writer problem above. (`ERD.md` is the
-  Postgres-flavoured source spec; this repo realises it in DuckLake.)
+- **The canonical domain schema lives as dbt models, not raw DDL.** `int_team`,
+  `int_league`, `int_season`, `int_match`, and the `int_*_match_link`/`int_*_event_link`
+  tables are dbt models under `dbt/data_platform/models/intermediate/int_*.sql`.
+  **Conform is symmetric and cross-provider:** ESPN conforms in **SQL** and is the
+  **union base**; each `int_<entity>` is `ESPN base CTE UNION ALL
+  read_parquet(<provider>_canonical_<entity>_additions.parquet)`, keep-one on the id.
+  Non-ESPN providers conform in **Python** (`src/data_platform/conform/<provider>.py`,
+  sharing `conform/resolve.py`) and contribute rows additively via those additions
+  files; Matchbook is live, football-data is a scaffold. Don't create/alter these
+  with a raw DuckDB connection — that reintroduces the second-writer problem above.
+  (`ERD.md` is the Postgres-flavoured source spec; this repo realises it in DuckLake.)
 - **`dbt build` is NOT green from a clean checkout.** `stg_users` (and the gold
   models) read `data/bronze/users.parquet`, which the Dagster `bronze` asset must
   materialize first; without it dbt fails with `IO Error: No files found …
   users.parquet`. This is environmental (no data yet), not a regression — run the
   ingest before `dbt build`, or expect that one model to error while the rest pass.
 - **dbt model Dagster asset keys are prefixed by their *schema* folder only — NOT
-  every subfolder.** A model under `models/silver/canonical/match.sql` gets
-  `AssetKey(["silver", "match"])`, **not** `["silver", "canonical", "match"]`; the
-  `canonical/` (and any deeper) subfolder is dropped. Likewise `gold/…` →
-  `["gold", "<model>"]`. Resolve the real key from the dbt manifest (or
-  `dbt_models.keys`) rather than guessing — a wrong key makes `BronzeAwareTranslator`
-  and cross-asset `deps=[...]` silently not form the edge. **Separately, the dbt
-  *node selector* DOES include the subfolder** — it's `silver.canonical.*` (e.g.
-  `dbt build --select silver.canonical.match`); `silver.match` selects nothing and
-  gives a vacuous green. So: Dagster `AssetKey(["silver","match"])` vs dbt selector
-  `silver.canonical.match` — two different namings, both load-bearing. Note: switching
+  every subfolder.** A model under `models/intermediate/int_match.sql` gets
+  `AssetKey(["intermediate", "int_match"])`; a deeper subfolder (were one to exist)
+  is dropped from the key. Likewise `marts/…` → `["marts", "<model>"]`. Resolve the
+  real key from the dbt manifest (or `dbt_models.keys`) rather than guessing — a
+  wrong key makes `BronzeAwareTranslator` and cross-asset `deps=[...]` silently not
+  form the edge. **Separately, the dbt *node selector* DOES include the subfolder** —
+  e.g. `dbt build --select intermediate.int_match` (the fully-qualified path); a bare
+  wrong prefix selects nothing and gives a vacuous green. So: Dagster
+  `AssetKey(["intermediate","int_match"])` vs the dbt selector path — both
+  load-bearing. Note: switching
   `profiles.yml` `path:` to DuckLake changes the manifest `database` field from
   `warehouse` to `ducklake`; this does NOT affect AssetKey derivation (which uses
   schema prefix only) — confirmed via `dagster definitions validate`.
@@ -122,11 +124,45 @@ raw_users ──▶ silver/stg_users ──▶ gold/dim_users_by_city ──▶ 
   `team_id`), computed by `macros/canonical_match_id.sql`. ALWAYS derive `match_id`
   (and link tables' `match_id`) via that macro over canonical resolved values; NEVER
   mint identity from a raw provider id (ESPN `event_id`, etc.). This is what lets a
-  future provider (Matchbook/football-data) de-dup onto the same fixture. The
-  resolution is currently inlined in `match.sql`/`team.sql`/`espn_match_link.sql`
-  (guarded by a `relationships` test); extract a shared resolver macro when a second
-  provider's conform layer lands.
-- **Extending `match.sql` for a new provider that mints canonical records: use `UNION ALL` + external Parquet.** When a conform layer needs to create canonical match rows that don't originate from ESPN (e.g. Matchbook `new_canonical` decisions), the Python asset writes those rows to `data/silver/<provider>_canonical_additions.parquet` and `match.sql` unions them in as a second CTE (`UNION ALL`, only when the file exists). Do NOT write directly to DuckLake or create a separate canonical table — the `relationships` test on the link table (e.g. `matchbook_event_link.match_id → match.match_id`) must remain passable, and direct DuckLake writes from Python reintroduce the second-writer problem.
+  future provider (Matchbook/football-data) de-dup onto the same fixture. The ESPN
+  resolution is inlined in `int_match.sql`/`int_team.sql`/`int_espn_match_link.sql`;
+  the Python providers share the `conform/resolve.py` identity authority (a replica
+  of the same macro) — both are guarded by a `relationships` test.
+- **A Python provider that mints canonical rows writes FOUR additions Parquet files, not one.**
+  `data/silver/<provider>_canonical_{match,team,league,season}_additions.parquet` — one per
+  canonical entity a minted match references. Minting a match MUST emit (or reuse) its whole
+  `season → league → team` chain: a team-addition per unresolved `home_team_id`/`away_team_id`,
+  a season-addition for its `season_id`, a league-addition for that season's `league_id`, and the
+  match-addition itself. Identity is **seed-first**: team ids resolve through the `team_aliases`
+  seed (`coalesce(seed.team_id, md5(lower(name)))`), league ids through the `league_aliases` seed
+  (`coalesce(seed.league_id, mint_provider_scoped(provider, provider_key))`), `season_id =
+  md5(league_id || '|' || year)`, and `match_id` via the `canonical_match_id` macro's replica —
+  never a raw provider id or a provider-private constant. Each of the four files is
+  **bootstrap-written empty** (correct columns, zero rows — via `conform.bootstrap_additions_files`)
+  **before any `dbt build`**, because the `int_*` models read them with `read_parquet`, which
+  ERRORS on a missing file (it does NOT silently return zero rows for an absent file — the
+  bootstrap-empty discipline is the only thing keeping the union green). The Python conform modules **never open
+  a DuckLake connection** (even read-only): they read bronze Parquet + the `canonical_*`
+  external-Parquet exports and write the additions files; dbt owns the catalog and unions the files
+  via `read_parquet` + `UNION ALL`, keep-one on the id. ESPN is exempt — it conforms in SQL and is
+  the union base. Do NOT write directly to DuckLake or create a separate canonical table (the
+  link-table `relationships` test on `match_id → match.match_id` must stay passable, and direct
+  DuckLake writes reintroduce the second-writer problem).
+- **`league_aliases` seed maps each provider's league key onto the ESPN-anchored canonical `league_id`.**
+  `dbt/data_platform/seeds/league_aliases.csv` — columns `league_id, canonical_name, provider,
+  provider_key`. The natural key is the composite **`(provider, provider_key)`** and MUST be
+  `unique` (one canonical mapping per provider key), enforced by a zero-dependency SINGULAR test
+  under `dbt/data_platform/tests/` (`... group by provider, provider_key having count(*) > 1`
+  returns zero rows — no `dbt_utils`). `league_id` and `provider_key` are `not_null`; `provider` is
+  `not_null` + `accepted_values(espn|matchbook|football_data)`. `league_id` is intentionally **NOT
+  `unique`** — several providers deliberately map onto one ESPN-anchored `league_id` (mirroring how
+  `team_aliases` allows many `alias` rows per `team_id`). The seed is **ESPN-anchor additive**: it
+  RECORDS ESPN's own mapping (`provider=espn, provider_key=<league_slug>, league_id=md5(<slug>)`)
+  and maps OTHER providers' keys onto that SAME id — it does NOT redefine ESPN identity, so ESPN's
+  `int_league`/`int_match`/`int_espn_*_link` stay byte-for-byte unchanged. `provider_key` encoding:
+  ESPN = `league_slug` (e.g. `eng.1`); Matchbook = `"<sport_id>|<category_id>"`; football_data =
+  its `<family|division>` key. **Seed-only, no auto-learn** (no write-back of provider spellings).
+  Registered in `dbt/data_platform/seeds/_seeds.yml` (the first `_seeds.yml` in the repo).
 - **The bronze→silver edge is wired by `BronzeAwareTranslator`** in `assets/dbt.py`,
   which maps the dbt source `users` to `AssetKey(["raw_users"])`. Renaming the
   bronze asset or the dbt source breaks the lineage link.

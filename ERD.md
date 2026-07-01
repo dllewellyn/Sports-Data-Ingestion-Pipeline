@@ -22,11 +22,11 @@ Rather than maintaining separate bespoke tables for every provider entity (e.g.,
 | :--- | :--- | :--- | :--- |
 | `team` (`silver.team`) | Postgres | **Physical Table Exists** | Distinct canonical table in `silver.team` (accessible via `bronze.team` view). Also cached in `bronze.provider_entity_cache`. |
 | `league` (`silver.league`) | Postgres | **Physical Table Exists** | Distinct canonical table in `silver.league` (accessible via `bronze.league` view). Also cached in `bronze.provider_entity_cache`. |
-| `season` (`silver.season`) | DuckLake | **Physical Table Exists** | One edition of a competition (`season.league_id` → `league.league_id`). Materialized in this repo's dbt-owned DuckLake catalog (`models/silver/canonical/season.sql`). |
+| `season` (`silver.season`) | DuckLake | **Physical Table Exists** | One edition of a competition (`season.league_id` → `league.league_id`). Materialized in this repo's dbt-owned DuckLake catalog (`models/intermediate/int_season.sql`). |
 | `match` (`silver.match`) | Postgres | **Physical Table Exists** | Distinct canonical table in `silver.match` (accessible via `bronze.match` view). Belongs to a `season` (`match.season_id`); the league is reached via `season.league_id`. |
 | `espn_match_link` (`silver.espn_match_link`) | Postgres | **Physical Table Exists** | Distinct canonical linking table in `silver.espn_match_link` (accessible via `bronze.espn_match_link` view). |
 | `matchbook_event_link` (`silver.matchbook_event_link`) | DuckLake | **Physical Table Exists** | Canonical linking table materialized in DuckLake by the Matchbook conform layer (Spec 006). Columns: `link_id`, `match_id`, `matchbook_event_id`, `match_method`, `confidence`, `review_status`. |
-| `football_data_match_link` (`silver.football_data_match_link`) | DuckLake | **Physical Table Exists** | Linking table mapping canonical matches to football-data.co.uk source rows via a **composite natural key** (the source exposes no stable match id). Materialized in this repo's dbt-owned DuckLake catalog (`models/silver/canonical/`). |
+| `football_data_match_link` (`silver.football_data_match_link`) | DuckLake | **Physical Table Exists** | Linking table mapping canonical matches to football-data.co.uk source rows via a **composite natural key** (the source exposes no stable match id). Materialized in this repo's dbt-owned DuckLake catalog (`models/intermediate/int_football_data_match_link.sql`). |
 | `bronze.provider_match_cache` | Postgres | **Physical Table Exists** | Active ingestion table storing fixture snapshots per provider (`provider_id = event_id`). |
 | `bronze.matchbook_market_catalogue`| Postgres | **Physical Table Exists** | Active ingestion table storing Matchbook market definitions and trading status. |
 | `bronze.matchbook_runner_catalogue`| Postgres | **Physical Table Exists** | Active ingestion table storing runner/selection metadata and sorting priority. |
@@ -37,13 +37,36 @@ Rather than maintaining separate bespoke tables for every provider entity (e.g.,
 > canonical schema (`team`, `league`, `season`, `match`, `espn_match_link`,
 > `matchbook_event_link`, `football_data_match_link`) is materialized in the
 > **dbt-owned DuckLake catalog** (PostgreSQL-backed, accessed via `ducklake:` URI in
-> `profiles.yml`) as typed dbt models under
-> `dbt/data_platform/models/silver/canonical/`. The **ESPN conform layer** (spec 002)
-> populates `league`, `season`, `team`, `match` and `espn_match_link` from the ESPN
-> bronze Parquet. The **Matchbook conform layer** (spec 006) populates
-> `matchbook_event_link` from the fuzzy-matching conform engine. `football_data_match_link`
-> remains an empty scaffold until its own conform layer lands (resolving through the
-> same `canonical_match_id` identity).
+> `profiles.yml`) as typed dbt models under `dbt/data_platform/models/intermediate/`
+> (`int_team`, `int_league`, `int_season`, `int_match`, `int_espn_match_link`,
+> `int_matchbook_event_link`, `int_football_data_match_link`).
+>
+> **Conform is a symmetric cross-provider layer, not ESPN-only.** ESPN conforms in
+> **SQL** and is the **union base** of the canonical models. Every other provider
+> conforms in **Python** (`src/data_platform/conform/<provider>.py`, sharing the
+> `resolve.py` identity authority) and contributes canonical rows *additively*:
+> each `int_<entity>` model is `ESPN base CTE UNION ALL
+> read_parquet(<provider>_canonical_<entity>_additions.parquet)`, keep-one on the id.
+> A Python provider that mints a match writes **four** files —
+> `data/silver/<provider>_canonical_{match,team,league,season}_additions.parquet` —
+> one per canonical entity that match's `season → league → team` chain references.
+> They are **bootstrap-written empty** (correct columns, zero rows) so the
+> `read_parquet` unions stay green before a provider mints anything. Matchbook's
+> conform (spec 006) is live and also populates `int_matchbook_event_link` from the
+> fuzzy-matching engine; football-data's conform is scaffolded. Every provider
+> resolves match identity through the SAME `canonical_match_id` macro, so a shared
+> real-world fixture lands on one `match_id`.
+>
+> **Seed:** `dbt/data_platform/seeds/league_aliases.csv` maps each provider's league
+> key onto the ESPN-anchored canonical `league_id`. Columns:
+> `league_id, canonical_name, provider, provider_key`. The composite `(provider,
+> provider_key)` is **unique**; `league_id` and `provider_key` are `not_null`;
+> `provider` accepts `espn|matchbook|football_data`. `league_id` is intentionally
+> **NOT unique** — several providers deliberately map onto one ESPN-anchored id
+> (mirroring how `team_aliases` allows many aliases per `team_id`). It is
+> ESPN-anchor **additive** (records ESPN's own `provider=espn, provider_key=<slug>,
+> league_id=md5(<slug>)` mapping and maps others onto that same id) and
+> **seed-only** (no auto-learn). Registered in `dbt/data_platform/seeds/_seeds.yml`.
 
 ---
 

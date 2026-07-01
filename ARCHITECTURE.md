@@ -38,9 +38,10 @@ football-data ────▶ bronze/football_{main,    ┘   bronze)         se
                                     extra})                       + provider links)    matches)        files)
 ```
 
-**ESPN is the source of truth for match identity.** Matchbook events are linked
-onto canonical matches by the **conform** layer; Matchbook odds drive **T-60**
-favourite enrichment (see §4b). The pipeline is one Dagster **code location**
+**ESPN is the union base for match identity.** Non-ESPN providers are linked
+onto (or mint) canonical matches by the **conform** layer — a symmetric,
+cross-provider layer (see §4b); Matchbook odds drive **T-60** favourite
+enrichment. The pipeline is one Dagster **code location**
 (`src/data_platform`) plus one dbt **project** (`dbt/data_platform`), stitched
 together so dbt models appear as Dagster assets.
 
@@ -65,18 +66,20 @@ src/data_platform/              # The Dagster code location (all orchestration P
 │   ├── registry.py season.py discovery.py http_client.py asset_results.py
 │   ├── ingest.py                       #   scoreboard JSON → bronze Parquet engine
 │   └── migrate_from_postgres.py        #   one-off historic backfill (§4b)
-├── matchbook/                  # Matchbook: events + odds + linking + enrichment
+├── matchbook/                  # Matchbook: events + odds + enrichment
 │   ├── ingest.py                       #   events REST API → bronze engine
 │   ├── migrate_from_postgres.py        #   one-off historic backfill (§4b)
 │   ├── t60.py                          #   T-60 favourite enrichment engine (§4b)
-│   ├── ingestor/                       #   real-time Redis odds → Parquet daemon
-│   │   ├── direct_parquet_consumer.py  #     subscribe, dedup, buffer, flush
-│   │   └── schema.py                   #     PyArrow schema for odds ticks
-│   └── conform/                        #   link Matchbook events → canonical matches (§4b)
-│       ├── engine.py                   #     orchestrator: load → resolve each event → write
-│       ├── scoring.py                  #     fuzzy score + kickoff tolerance
-│       ├── event_name.py               #     parse "Home vs Away"
-│       └── overrides.py                #     load human-review decisions
+│   └── ingestor/                       #   real-time Redis odds → Parquet daemon
+│       ├── direct_parquet_consumer.py  #     subscribe, dedup, buffer, flush
+│       └── schema.py                   #     PyArrow schema for odds ticks
+├── conform/                    # Symmetric cross-provider conform layer (§4b)
+│   ├── resolve.py                      #   shared identity authority (season→league→team→match)
+│   ├── matchbook.py                    #   Matchbook events → resolve/link/mint → additions Parquet
+│   ├── football_data.py                #   football-data conform (scaffolded)
+│   ├── matchbook_scoring.py            #   fuzzy score + kickoff tolerance
+│   ├── matchbook_event_name.py         #   parse "Home vs Away"
+│   └── matchbook_overrides.py          #   load human-review decisions
 ├── mcp/                        # MCP server: read-only lakehouse catalogue inspector
 │   └── inspector.py server.py __main__.py
 └── assets/                     # Dagster assets — thin wrappers over the engines above
@@ -140,15 +143,16 @@ Hard rules that define the architecture:
 ### Module dependency direction
 
 ```
-definitions.py ──imports──▶ assets/*  ──imports──▶ football/ espn/ matchbook/ mcp/,
+definitions.py ──imports──▶ assets/*  ──imports──▶ football/ espn/ matchbook/ conform/ mcp/,
                                                     models/*, config, otel  (leaf-ward)
 ```
 
 - `config.py` and `models/*` are **leaves**: they import nothing from `assets/`
   or `definitions.py`. `otel.py` depends only on `config.py`.
-- Source packages (`football/`, `espn/`, `matchbook/`, `mcp/`) hold the
-  Dagster-free engines and helpers. They import `config`/`models`/`otel`, never
-  `assets/` or `definitions.py`, and never each other.
+- Source packages (`football/`, `espn/`, `matchbook/`, `mcp/`) and the
+  cross-provider `conform/` package hold the Dagster-free engines and helpers.
+  They import `config`/`models`/`otel`, never `assets/` or `definitions.py`, and
+  never each other (per-provider conform modules share only `conform/resolve.py`).
 - `assets/*` modules are thin wrappers that read `settings`, call an engine, and
   emit Dagster metadata. Bronze→canonical→marts ordering is expressed through
   Dagster asset keys (and `BronzeAwareTranslator`), not Python imports.
@@ -167,12 +171,13 @@ definitions.py ──imports──▶ assets/*  ──imports──▶ football/
 | `football/`, `espn/` | A bronze source's engine + helpers: registry/season (leaves), discovery/http_client (network edge), `ingest.py` (fetch→validate→write engine) | `config`, `models`, `otel` | depend on `assets/` or another source |
 | `matchbook/ingest.py` | Matchbook events REST → bronze engine (auth, paginate, flatten, validate, write) | `models`, `otel` | open a DuckLake connection |
 | `matchbook/ingestor/` | Real-time Redis odds → Parquet daemon (subscribe, dedup, buffer, flush) | `config` | do transformation/joining |
-| `matchbook/conform/` | Link Matchbook events to canonical matches (fuzzy + overrides + additions) → Parquet | `models`, `config` | write to DuckLake (§4b) |
+| `conform/` | Symmetric cross-provider conform: per-provider modules (`matchbook.py`, `football_data.py`) resolve/link/mint via the shared `resolve.py` identity authority → four `<provider>_canonical_*_additions.parquet` + link/exception Parquet | `models`, `config` | write to DuckLake (§4b) |
+| `conform/resolve.py` | Shared identity authority: season→league→team→match id resolution (seed-first) reused by every provider | `config` | open a DuckLake connection |
 | `matchbook/t60.py` | Identify the pre-match favourite from odds ticks → Parquet | `config` | write to DuckLake |
 | `*/migrate_from_postgres.py` | One-off historic backfill from the legacy PostgreSQL → bronze Parquet | `models` | run on a schedule (§4b) |
 | `mcp/` | Read-only lakehouse catalogue inspector (parses the dbt manifest) | `config` | mutate the warehouse |
 | `assets/ingestion/*` | Thin Dagster wrappers over the bronze engines | source packages, `models`, `config`, `otel` | depend on other assets |
-| `assets/intermediate/*` | Thin Dagster wrappers over conform + T-60 | `matchbook`, `config` | reimplement transformation in Python |
+| `assets/intermediate/*` | Thin Dagster wrappers over conform + T-60 | `conform`, `matchbook`, `config` | reimplement transformation in Python |
 | `assets/dbt.py` | Run/test dbt; map dbt source → bronze asset key for lineage | (dagster-dbt) | reimplement transformations in Python |
 
 Transformation logic belongs in **dbt SQL**, not Python. Python assets handle
@@ -181,14 +186,22 @@ detection), and consumption; everything else is dbt.
 
 ## 4b. Concepts (names not obvious from the file tree)
 
-- **Conform** (`matchbook/conform/`) — ESPN owns match identity, so Matchbook's
-  own betting events must be *linked* onto the right canonical `match`. The
-  conform engine fuzzy-matches parsed team names + kickoff time (three confidence
-  tiers), applies human overrides, and **mints a new canonical match** when
-  Matchbook knows a fixture ESPN doesn't. It writes three Parquet files (resolved
-  links, unresolved exceptions, canonical additions) that dbt reads into the
-  provider link tables. There is **no ESPN conform layer** — ESPN populates the
-  canonical model directly.
+- **Conform** (`conform/`) — a **symmetric, cross-provider** layer. ESPN conforms
+  in SQL and is the **union base** of the canonical `int_*` models; every other
+  provider conforms in Python here (per-provider module — `matchbook.py`,
+  `football_data.py`) and contributes canonical rows *additively*. A provider
+  resolves each source event's whole `season → league → team` chain through the
+  shared `resolve.py` identity authority (seed-first: `team_aliases`,
+  `league_aliases`, then the `canonical_match_id` macro replica), fuzzy-matches
+  team names + kickoff time (three confidence tiers) with human overrides, and
+  **mints new canonical rows** when it knows a fixture ESPN doesn't. Each provider
+  writes **four** `data/silver/<provider>_canonical_{match,team,league,season}_additions.parquet`
+  files (bootstrap-written empty so the `int_*` `read_parquet` unions stay green
+  before a provider mints anything) plus its resolved-links and unresolved-exception
+  Parquet. dbt reads those files: `int_team`/`int_league`/`int_season`/`int_match`
+  are each `ESPN base CTE UNION ALL read_parquet(<provider>_additions)`, keep-one
+  on the id; the `int_*_link` tables read the resolved links. The Python conform
+  modules **never open a DuckLake connection** — dbt owns the catalog.
 - **T-60 enrichment** (`matchbook/t60.py`) — for each linked event, find the
   market favourite from the odds ticks in the window 45–75 min before kickoff
   (lowest back price = shortest odds), resolve that runner to a team, and write

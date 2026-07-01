@@ -1,4 +1,5 @@
--- Canonical domain entity: match/fixture (silver), conformed from ESPN.
+-- Canonical domain entity: match/fixture (silver). Cross-provider: the ESPN base CTE
+-- UNION ALL each Python provider's <provider>_canonical_match_additions.parquet.
 -- A match belongs to a season (match -> season -> league); the league is reached
 -- via season.league_id, so there is no direct league_id here.
 --
@@ -69,7 +70,8 @@ espn_matches as (
 ),
 
 -- New canonical rows minted by the Matchbook conform engine (action='new_canonical').
--- try_read_parquet returns zero rows (not an error) when the file is absent (E11).
+-- read_parquet REQUIRES the file to exist (it errors if absent); the conform asset
+-- bootstrap-writes it empty, so an un-minted Matchbook provider contributes zero rows (E11).
 canonical_additions as (
     select
         match_id,
@@ -86,7 +88,8 @@ canonical_additions as (
 ),
 
 -- New canonical rows minted by the football-data conform engine (action='new_canonical').
--- try_read_parquet returns zero rows (not an error) when the file is absent (E11).
+-- read_parquet REQUIRES the file to exist (it errors if absent); the conform asset
+-- bootstrap-writes it empty, so an un-minted football-data provider contributes zero rows (E11).
 football_data_canonical_additions as (
     select
         match_id,
@@ -111,7 +114,8 @@ combined as (
 ),
 
 -- T-60 enrichment: favourite team from pre-match Matchbook odds.
--- try_read_parquet returns zero rows when file absent (E11 — favourite_team_id stays NULL).
+-- read_parquet REQUIRES the file to exist (it errors if absent); the T-60 asset
+-- bootstrap-writes it empty, so a match with no odds keeps favourite_team_id NULL (E11).
 t60_enrichment as (
     select match_id, favourite_team_id
     from read_parquet(

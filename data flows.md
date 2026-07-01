@@ -39,49 +39,54 @@ Raw data written as Parquet, one file per logical partition. No enrichment or jo
 
 ## Silver layer — canonical model (dbt + Python)
 
-### Step 1 — Canonical dimensions from ESPN (dbt, part of `espn_ingestion`)
+The canonical model is built by a **symmetric cross-provider conform layer**: ESPN
+conforms in **SQL** and is the **union base**; every other provider conforms in
+**Python** and contributes canonical rows *additively*. Each `int_<entity>` model is
+`ESPN base CTE UNION ALL read_parquet(<provider>_canonical_<entity>_additions.parquet)`,
+keep-one on the id.
 
-ESPN bronze is the **source of truth for match identity**. These dbt models run after each ESPN ingest:
+### Step 1 — Canonical dimensions: ESPN base (dbt, part of `espn_ingestion`)
+
+ESPN bronze is the **union base for match identity**. These dbt models
+(`models/intermediate/int_*`) run after each ESPN ingest:
 
 | Model | What it builds |
 |---|---|
 | `stg_espn_events` | Staging view over all ESPN bronze Parquet |
-| `league` | Canonical leagues: `league_id = md5(league_slug)` |
-| `season` | Canonical seasons: `season_id = md5(league_id \| season_year)` |
-| `team` | Canonical teams, alias-resolved via the `team_aliases` seed |
-| `match` | One row per fixture — `match_id` is a deterministic surrogate over (league, season, kickoff date, home team, away team). `ft_score` is populated when `status_completed = true`, else `NULL`. `favourite_team_id` is joined from T-60 enrichment (see below). |
-| `espn_match_link` | Maps `espn_event_id → match_id` |
+| `int_league` | Canonical leagues: `league_id = md5(league_slug)` (+ per-provider additions) |
+| `int_season` | Canonical seasons: `season_id = md5(league_id \| season_year)` (+ additions) |
+| `int_team` | Canonical teams, alias-resolved via the `team_aliases` seed (+ additions) |
+| `int_match` | One row per fixture — `match_id` is a deterministic surrogate over (league, season, kickoff date, home team, away team). `ft_score` populated when `status_completed = true`, else `NULL`. `favourite_team_id` joined from T-60 enrichment (below). Unions ESPN + per-provider additions. |
+| `int_espn_match_link` | Maps `espn_event_id → match_id` |
 
-**Key design decision:** `match_id` is computed by the `canonical_match_id` macro over *canonical* resolved identifiers — never raw provider IDs. This means a Matchbook or football-data event describing the same real-world fixture will land on the **same** `match_id` once resolved.
+**Key design decision:** `match_id` is computed by the `canonical_match_id` macro over *canonical* resolved identifiers — never raw provider IDs. This means a Matchbook or football-data event describing the same real-world fixture lands on the **same** `match_id` once resolved. Non-ESPN providers resolve their whole `season → league → team` chain **seed-first**: `team_aliases` for teams, `league_aliases` (`seeds/league_aliases.csv`, registered in `seeds/_seeds.yml`) for leagues, then the shared `canonical_match_id` replica for the match.
 
 ### Step 2 — Canonical data exported for Python (dbt external models)
 
-Because Python assets must not open a DuckLake connection, two external Parquet exports bridge dbt → Python:
+Because Python assets must not open a DuckLake connection, external Parquet exports bridge dbt → Python (regenerated each `espn_ingestion` run):
 - `data/silver/canonical/match.parquet` (`canonical_match_export`)
 - `data/silver/canonical/team.parquet` (`canonical_team_export`)
+- (+ league/season exports for the seed-first chain resolution)
 
-These are regenerated each `espn_ingestion` run.
+### Step 3 — Python conform per provider (`conform/`, symmetric)
 
-### Step 3 — Matchbook conform (`matchbook_conform_job`, 1h after events ingest)
+Each non-ESPN provider has a module under `src/data_platform/conform/`
+(`matchbook.py` live; `football_data.py` scaffolded), all sharing the `resolve.py`
+identity authority. A provider's conform asset reads bronze events + the canonical
+Parquet exports, fuzzy-matches on team-name similarity + kickoff proximity, applies
+human overrides, and **mints canonical rows** for fixtures ESPN doesn't have. It
+writes **four** additions files plus links/exceptions:
+- `data/silver/<provider>_canonical_{match,team,league,season}_additions.parquet` — one per canonical entity the minted match's `season → league → team` chain references; unioned back into `int_{match,team,league,season}` via `read_parquet` + `UNION ALL`. These are **bootstrap-written empty** (correct columns, zero rows) by `conform.bootstrap_additions_files` so the `int_*` `read_parquet` unions stay green before a provider mints anything (`read_parquet` errors on a missing file — it does not silently return zero rows, so the empty file must exist).
+- `data/silver/<provider>_resolved_links.parquet` — linked events with `<provider>_event_id → match_id`, confidence, review status → `int_<provider>_*_link` (dbt).
+- `data/exceptions/<provider>_unresolved.parquet` — events that couldn't be matched.
 
-**`matchbook_conform` Python asset** reads:
-- Bronze Matchbook events (`data/bronze/matchbook_events/**/*.parquet`)
-- Canonical match/team Parquet exports
-
-Fuzzy-matches each Matchbook football event to a canonical `match` row using team name similarity + kickoff time proximity. Writes:
-- `data/silver/matchbook_resolved_links.parquet` — linked events with `matchbook_event_id → match_id`, confidence score, review status
-- `data/silver/matchbook_canonical_additions.parquet` — fixtures that Matchbook knows about but ESPN doesn't (fed back into `match.sql` via `UNION ALL`)
-- `data/exceptions/matchbook_unresolved.parquet` — events that couldn't be matched
-
-**`matchbook_event_link` (dbt)** reads the resolved links Parquet → DuckLake table.
-
-Current resolution rate: ~18% (142/791 football events). Low rate reflects ESPN's limited league coverage vs Matchbook's global footprint — it improves as ESPN data grows.
+Matchbook current resolution rate: ~18% (142/791 football events). Low rate reflects ESPN's limited league coverage vs Matchbook's global footprint — it improves as ESPN data grows. football-data's conform body is a `NotImplementedError` scaffold; its four additions files bootstrap empty so `int_*` stays green.
 
 ### Step 4 — T-60 enrichment (`matchbook_t60_enrichment` Python asset)
 
 Reads the resolved links and the odds bronze lake. Finds the best-back price per team at T−60 minutes before kickoff, determines which team was the market favourite, and writes `data/silver/matchbook_t60_enrichment.parquet`.
 
-`match.sql` left-joins this file → `favourite_team_id` column on the canonical `match` table.
+`int_match` left-joins this file → `favourite_team_id` column on the canonical match table.
 
 ---
 
