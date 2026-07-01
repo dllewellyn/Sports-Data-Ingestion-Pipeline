@@ -13,9 +13,9 @@ No ``from __future__ import annotations`` — Dagster introspects the annotation
 
 from dagster import AssetKey, MaterializeResult, asset
 
-from ..config import settings
-from ..matchbook.migrate_from_postgres import MigrationReport, run_matchbook_postgres_migration
-from ..models.validation import matchbook_events_bronze_schema
+from ...config import settings
+from ...matchbook.migrate_from_postgres import MigrationReport, run_matchbook_postgres_migration
+from ...models.validation import matchbook_events_bronze_schema
 
 
 @asset(

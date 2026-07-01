@@ -8,4 +8,4 @@
   )
 }}
 
-select * from {{ ref('completed_matches') }}
+select * from {{ ref('fct_completed_matches') }}

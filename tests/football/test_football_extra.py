@@ -4,7 +4,7 @@ from datetime import date
 
 import pandas as pd
 
-from data_platform.assets.football_extra import run_extra_backfill
+from data_platform.assets.ingestion.football_extra import run_extra_backfill
 from data_platform.config import settings
 from data_platform.football.registry import ExtraLeague
 

@@ -13,13 +13,13 @@ from datetime import date
 
 from dagster import AssetKey, MaterializeResult, asset
 
-from ..config import settings
-from ..espn.asset_results import to_materialize_result
-from ..espn.discovery import discover_units
-from ..espn.http_client import ThrottledFetcher, ThrottledHttpClient
-from ..espn.ingest import IngestionReport, ingest_units
-from ..espn.registry import SOCCER_LEAGUES, EspnLeague
-from ..models.validation import espn_bronze_schema
+from ...config import settings
+from ...espn.asset_results import to_materialize_result
+from ...espn.discovery import discover_units
+from ...espn.http_client import ThrottledFetcher, ThrottledHttpClient
+from ...espn.ingest import IngestionReport, ingest_units
+from ...espn.registry import SOCCER_LEAGUES, EspnLeague
+from ...models.validation import espn_bronze_schema
 
 
 def run_espn_ingest(

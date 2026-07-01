@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 from dagster import AssetKey, MaterializeResult
 
-from data_platform.assets.matchbook_events import matchbook_events_bronze
+from data_platform.assets.ingestion.matchbook_events import matchbook_events_bronze
 
 
 def test_asset_key_is_correct() -> None:
@@ -31,7 +31,7 @@ def test_no_future_annotations_in_asset_module() -> None:
     annotations cause DagsterInvalidDefinitionError. We check stripped source lines
     (not the raw string) to avoid false positives from docstrings mentioning the import.
     """
-    import data_platform.assets.matchbook_events as mod
+    import data_platform.assets.ingestion.matchbook_events as mod
 
     lines = inspect.getsource(mod).splitlines()
     # An actual import line (stripped) would be exactly this string
@@ -50,7 +50,7 @@ def test_asset_returns_materialize_result_on_success(tmp_path) -> None:
 
     with (
         patch(
-            "data_platform.assets.matchbook_events.run_matchbook_events_ingest",
+            "data_platform.assets.ingestion.matchbook_events.run_matchbook_events_ingest",
             return_value=mock_report,
         ),
         build_asset_context() as ctx,
@@ -66,7 +66,7 @@ def test_asset_reraises_on_ingest_failure(tmp_path) -> None:
 
     with (
         patch(
-            "data_platform.assets.matchbook_events.run_matchbook_events_ingest",
+            "data_platform.assets.ingestion.matchbook_events.run_matchbook_events_ingest",
             side_effect=RuntimeError("matchbook ingest failed: 1 failures"),
         ),
         pytest.raises(RuntimeError, match="failures"),

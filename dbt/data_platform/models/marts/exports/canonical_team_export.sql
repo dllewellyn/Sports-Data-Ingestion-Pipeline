@@ -12,4 +12,4 @@ select
     team_id,
     name,
     similar_names
-from {{ ref('team') }}
+from {{ ref('int_team') }}

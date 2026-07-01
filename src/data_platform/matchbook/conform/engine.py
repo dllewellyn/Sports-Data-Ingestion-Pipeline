@@ -1,8 +1,4 @@
-"""Matchbook conform engine — fuzzy matching, override lookup, exceptions queue.
-
-Pure-Python module (Dagster-free). The thin Dagster wrapper lives in
-``assets/matchbook_conform.py``.
-"""
+"""Matchbook conform engine orchestrator."""
 
 from __future__ import annotations
 
@@ -11,35 +7,25 @@ import json
 import logging
 import tempfile
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
-from rapidfuzz.fuzz import token_sort_ratio
+
+from .overrides import load_overrides
+from .reversal import parse_event_name
+from .scoring import (
+    HIGH_CONFIDENCE,
+    HIGH_THRESHOLD,
+    KICKOFF_TOLERANCE_MINUTES,
+    MEDIUM_CONFIDENCE,
+    MEDIUM_THRESHOLD,
+    _parse_start_utc,
+    _score_candidate,
+)
 
 logger = logging.getLogger(__name__)
 
-# ── Constants ───────────────────────────────────────────────────────────────
-
-HIGH_CONFIDENCE = 0.95
-MEDIUM_CONFIDENCE = 0.75
-HIGH_THRESHOLD = 0.85
-MEDIUM_THRESHOLD = 0.70
-KICKOFF_TOLERANCE_MINUTES = 90
-
 FOOTBALL_SPORT_ID = 15
-
-OVERRIDE_COLUMNS = [
-    "matchbook_event_id",
-    "action",
-    "match_id",
-    "merge_source_match_id",
-    "decided_at",
-    "decided_by",
-]
-
-
-# ── Data classes ────────────────────────────────────────────────────────────
 
 
 @dataclass
@@ -49,9 +35,6 @@ class ConformReport:
     overrides_applied: int = 0
     additions_count: int = 0
     failures: list[str] = field(default_factory=list)
-
-
-# ── Helpers ─────────────────────────────────────────────────────────────────
 
 
 def compute_canonical_match_id(
@@ -65,32 +48,6 @@ def compute_canonical_match_id(
     return hashlib.md5(key.encode()).hexdigest()
 
 
-def load_overrides(path: Path) -> pd.DataFrame:
-    """Load human-override decisions from a Parquet file.
-
-    Returns an empty DataFrame with the correct columns when the file is absent.
-    """
-    if not path.exists():
-        return pd.DataFrame(columns=OVERRIDE_COLUMNS)
-    return pd.read_parquet(path)
-
-
-def parse_event_name(event_name: str) -> tuple[str, str] | None:
-    """Parse a Matchbook event name into (home, away) team names.
-
-    Split on `` vs `` (the Matchbook separator). Returns None if
-    no separator found or either part is empty after stripping.
-    """
-    if " vs " not in event_name:
-        return None
-    parts = event_name.split(" vs ", maxsplit=1)
-    home = parts[0].strip()
-    away = parts[1].strip()
-    if not home or not away:
-        return None
-    return (home, away)
-
-
 def _write_parquet_atomic(df: pd.DataFrame, path: Path) -> None:
     """Write a DataFrame to Parquet atomically (temp file + rename)."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -98,60 +55,6 @@ def _write_parquet_atomic(df: pd.DataFrame, path: Path) -> None:
         tmp_path = Path(tmp.name)
     df.to_parquet(tmp_path, index=False)
     tmp_path.replace(path)
-
-
-def _parse_start_utc(value: str) -> datetime | None:
-    """Parse a start_utc string to a naive UTC datetime. Returns None on failure."""
-    try:
-        ts = pd.Timestamp(value)
-        # Normalize to UTC and strip tzinfo so arithmetic with naive kickoff_time works.
-        if ts.tzinfo is not None:
-            ts = ts.tz_convert("UTC").tz_localize(None)
-        return ts.to_pydatetime()
-    except Exception:
-        return None
-
-
-def _score_candidate(
-    home_parsed: str,
-    away_parsed: str,
-    start_utc: datetime,
-    match_row: dict,
-) -> dict | None:
-    """Score a candidate canonical match against a parsed Matchbook event.
-
-    Returns a dict with match_id, home_score, away_score, combined_score,
-    kickoff_diff_minutes, or None if kickoff_time is missing.
-    """
-    canon_home = match_row.get("home_team_name", "")
-    canon_away = match_row.get("away_team_name", "")
-    kickoff_time = match_row.get("kickoff_time")
-
-    if kickoff_time is None or pd.isna(kickoff_time):
-        return None
-
-    kickoff_ts = pd.Timestamp(kickoff_time)
-    if kickoff_ts.tzinfo is not None:
-        kickoff_ts = kickoff_ts.tz_convert("UTC").tz_localize(None)
-    kickoff_dt = kickoff_ts.to_pydatetime()
-    diff_minutes = abs((start_utc - kickoff_dt).total_seconds()) / 60.0
-
-    home_score = token_sort_ratio(home_parsed, canon_home) / 100.0
-    away_score = token_sort_ratio(away_parsed, canon_away) / 100.0
-
-    return {
-        "match_id": match_row["match_id"],
-        "home_team_name": canon_home,
-        "away_team_name": canon_away,
-        "kickoff_time": str(kickoff_time),
-        "home_score": home_score,
-        "away_score": away_score,
-        "combined_score": home_score + away_score,
-        "kickoff_diff_minutes": diff_minutes,
-    }
-
-
-# ── Main engine ─────────────────────────────────────────────────────────────
 
 
 def run_conform(
@@ -430,7 +333,7 @@ def run_conform(
     _write_parquet_atomic(exceptions_df, exceptions_dir / "matchbook_unresolved.parquet")
     report.exceptions_count = len(exceptions_df)
 
-    # Always write, even if empty — read_parquet in match.sql requires the file to exist.
+    # Always write, even if empty — read_parquet in int_match.sql requires the file to exist.
     additions_df = (
         pd.DataFrame(addition_rows)
         if addition_rows

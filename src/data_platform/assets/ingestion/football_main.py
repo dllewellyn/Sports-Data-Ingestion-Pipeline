@@ -13,14 +13,14 @@ from datetime import date
 
 from dagster import AssetKey, MaterializeResult, asset
 
-from ..config import settings
-from ..football.asset_results import to_materialize_result
-from ..football.discovery import DiscoveredFile, discover_files
-from ..football.http_client import ThrottledFetcher, ThrottledHttpClient
-from ..football.ingest import IngestionReport, ingest_family
-from ..football.registry import MAIN_LEAGUES, MainLeague
-from ..models.schemas import MainMatchRecord
-from ..models.validation import main_bronze_schema
+from ...config import settings
+from ...football.asset_results import to_materialize_result
+from ...football.discovery import DiscoveredFile, discover_files
+from ...football.http_client import ThrottledFetcher, ThrottledHttpClient
+from ...football.ingest import IngestionReport, ingest_family
+from ...football.registry import MAIN_LEAGUES, MainLeague
+from ...models.schemas import MainMatchRecord
+from ...models.validation import main_bronze_schema
 
 MAIN_CORE = ["Div", "Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG", "FTR"]
 

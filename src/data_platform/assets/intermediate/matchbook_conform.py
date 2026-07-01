@@ -7,9 +7,9 @@ No ``from __future__ import annotations`` — Dagster introspects the annotation
 import pandas as pd
 from dagster import AssetKey, MaterializeResult, asset
 
-from ..config import settings
-from ..matchbook.conform import run_conform
-from ..otel import get_tracer
+from ...config import settings
+from ...matchbook.conform import run_conform
+from ...otel import get_tracer
 
 
 def _ensure_empty_parquet(path, columns: list[str]) -> None:
@@ -25,12 +25,12 @@ def _ensure_empty_parquet(path, columns: list[str]) -> None:
 
 @asset(
     key=AssetKey(["matchbook_conform"]),
-    group_name="silver",
+    group_name="intermediate",
     compute_kind="python",
     deps=[
         AssetKey(["matchbook_events_bronze"]),
-        AssetKey(["silver", "canonical_match_export"]),
-        AssetKey(["silver", "canonical_team_export"]),
+        AssetKey(["marts", "canonical_match_export"]),
+        AssetKey(["marts", "canonical_team_export"]),
     ],
     description=(
         "Matchbook conform: fuzzy-matches football events to canonical matches, "

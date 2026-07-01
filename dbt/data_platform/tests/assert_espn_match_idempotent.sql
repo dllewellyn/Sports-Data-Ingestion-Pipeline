@@ -11,9 +11,9 @@
 --   * Re-running over a POST-MATCH scoreboard fills ft_score on the SAME match_id:
 --     the identity inputs are unchanged by the result, only ft_score flips from NULL
 --     to a score. (Cross-build verification procedure: build over a SCHEDULED
---     fixture, then over the FINAL fixture, and confirm `select count(*) from match`
+--     fixture, then over the FINAL fixture, and confirm `select count(*) from int_match`
 --     is unchanged while the row's ft_score becomes non-null. Run it via:
---       dbt build --select silver.match  # twice, swapping the bronze parquet
+--       dbt build --select intermediate.int_match  # twice, swapping the bronze parquet
 --     this single test asserts the within-build half that dbt can evaluate.)
 --
 -- Failure rows: any match_id appearing more than once (a second match_id for the
@@ -21,6 +21,6 @@
 select
     match_id,
     count(*) as n
-from {{ ref('match') }}
+from {{ ref('int_match') }}
 group by match_id
 having count(*) > 1

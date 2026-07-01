@@ -19,17 +19,17 @@ def _load_defs():
     return defs
 
 
-# The ESPN end-to-end selection: bronze + the verified `["silver","<model>"]` dbt keys
-# (NOT `["silver","canonical",...]`) plus the `team_aliases` seed (an ESPN-conform input).
+# The ESPN end-to-end selection: bronze + the verified dbt keys (staging + intermediate)
+# plus the `team_aliases` seed (an ESPN-conform input in the staging schema).
 ESPN_KEYS = {
     "espn_bronze",
-    "silver/stg_espn_events",
-    "silver/league",
-    "silver/season",
-    "silver/team",
-    "silver/match",
-    "silver/espn_match_link",
-    "silver/team_aliases",
+    "staging/stg_espn_events",
+    "intermediate/int_league",
+    "intermediate/int_season",
+    "intermediate/int_team",
+    "intermediate/int_match",
+    "intermediate/int_espn_match_link",
+    "staging/team_aliases",
 }
 
 
@@ -118,7 +118,9 @@ def test_matchbook_conform_schedule_registered() -> None:
 
 def test_matchbook_conform_asset_deps_include_events_bronze() -> None:
     """U31 / AC14 — matchbook_conform depends on AssetKey(['matchbook_events_bronze'])."""
-    from data_platform.assets.matchbook_conform import matchbook_conform as conform_asset
+    from data_platform.assets.intermediate.matchbook_conform import (
+        matchbook_conform as conform_asset,
+    )
 
     dep_keys = set(conform_asset.dependency_keys)
     assert AssetKey(["matchbook_events_bronze"]) in dep_keys, (

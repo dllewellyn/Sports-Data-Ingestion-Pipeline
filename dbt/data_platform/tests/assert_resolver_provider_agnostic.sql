@@ -12,8 +12,8 @@
 -- match.sql, and asserts the result equals that row's match.match_id.
 --
 -- Crucially NONE of the inputs come from stg_espn_events: league_id comes from
--- `league` (via `season`), season_id/home_team_id/away_team_id are read off the
--- canonical `match` row, and the date is `cast(match.kickoff_time as date)`. So the
+-- `int_league` (via `int_season`), season_id/home_team_id/away_team_id are read off the
+-- canonical `int_match` row, and the date is `cast(match.kickoff_time as date)`. So the
 -- equality exercises the real resolver against real conform output. If the macro had
 -- ANY ESPN-specific input (e.g. the event_id), the reconstructed id would diverge and
 -- this test would return failure rows.
@@ -27,9 +27,9 @@ with recomputed as (
             'm.home_team_id',
             'm.away_team_id'
         ) }} as second_provider_match_id
-    from {{ ref('match') }} m
-    join {{ ref('season') }} s on m.season_id = s.season_id
-    join {{ ref('league') }} l on s.league_id = l.league_id
+    from {{ ref('int_match') }} m
+    join {{ ref('int_season') }} s on m.season_id = s.season_id
+    join {{ ref('int_league') }} l on s.league_id = l.league_id
 )
 
 -- Fail if any reconstructed id differs from the stored match_id.

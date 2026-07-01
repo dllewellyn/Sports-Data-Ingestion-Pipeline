@@ -6,17 +6,17 @@ No ``from __future__ import annotations`` — Dagster introspects the annotation
 
 from dagster import AssetKey, MaterializeResult, asset
 
-from ..config import settings
-from ..matchbook.t60 import run_t60_enrichment
-from ..otel import get_tracer
+from ...config import settings
+from ...matchbook.t60 import run_t60_enrichment
+from ...otel import get_tracer
 
 
 @asset(
     key=AssetKey(["matchbook_t60_enrichment"]),
-    group_name="silver",
+    group_name="intermediate",
     compute_kind="python",
     deps=[
-        AssetKey(["silver", "matchbook_event_link"]),
+        AssetKey(["intermediate", "int_matchbook_event_link"]),
         AssetKey(["matchbook_events_bronze"]),
     ],
     description=(

@@ -1,9 +1,9 @@
 version: 2
 
 models:
-  - name: team
+  - name: int_team
     description: >
-      Canonical team entity (silver), conformed from ESPN + the team_aliases seed.
+      Canonical team entity (intermediate), conformed from ESPN + the team_aliases seed.
       One row per canonical team; seeded aliases resolve to the seed's team_id,
       unseen ESPN names mint md5(lower(name)). Seed-only (no auto-learn).
     columns:
@@ -19,8 +19,8 @@ models:
       - name: similar_names
         description: "Alternative names/aliases (seed aliases, else [name])."
 
-  - name: league
-    description: "Canonical competition entity (silver), conformed from ESPN."
+  - name: int_league
+    description: "Canonical competition entity (intermediate), conformed from ESPN."
     columns:
       - name: league_id
         description: "Internal canonical competition identifier (md5(league_slug))."
@@ -36,9 +36,9 @@ models:
         data_tests:
           - not_null
 
-  - name: season
+  - name: int_season
     description: >
-      Canonical season/edition of a competition (silver), conformed from ESPN. One
+      Canonical season/edition of a competition (intermediate), conformed from ESPN. One
       row per edition of a league (e.g. the 2025-26 Premier League).
     columns:
       - name: season_id
@@ -47,18 +47,18 @@ models:
           - not_null
           - unique
       - name: league_id
-        description: "FK -> league.league_id."
+        description: "FK -> int_league.league_id."
         data_tests:
           - not_null
           - relationships:
               arguments:
-                to: ref('league')
+                to: ref('int_league')
                 field: league_id
       - name: name
         description: "Season label (ESPN season_display, e.g. '2025-26')."
 
-  - name: match
-    description: "Canonical fixture entity (silver), conformed from ESPN."
+  - name: int_match
+    description: "Canonical fixture entity (intermediate), conformed from ESPN."
     columns:
       - name: match_id
         description: "Internal canonical fixture identifier (canonical_match_id macro)."
@@ -66,35 +66,35 @@ models:
           - not_null
           - unique
       - name: season_id
-        description: "FK -> season.season_id (league reached via season.league_id)."
+        description: "FK -> int_season.season_id (league reached via season.league_id)."
         data_tests:
           - not_null
           - relationships:
               arguments:
-                to: ref('season')
+                to: ref('int_season')
                 field: season_id
       - name: home_team_id
-        description: "FK -> team.team_id (home)."
+        description: "FK -> int_team.team_id (home)."
         data_tests:
           - not_null
           - relationships:
               arguments:
-                to: ref('team')
+                to: ref('int_team')
                 field: team_id
       - name: away_team_id
-        description: "FK -> team.team_id (away)."
+        description: "FK -> int_team.team_id (away)."
         data_tests:
           - not_null
           - relationships:
               arguments:
-                to: ref('team')
+                to: ref('int_team')
                 field: team_id
 
-  - name: espn_match_link
+  - name: int_espn_match_link
     description: >
       Maps each ESPN event to its canonical match. One row per ESPN event;
       `match_id` is recomputed by the SAME resolution + canonical_match_id macro as
-      `match`, so it equals `match.match_id` (the relationships test catches drift).
+      `int_match`, so it equals `int_match.match_id` (the relationships test catches drift).
       The provenance columns are the forward-compatible linkage seam: ESPN resolves
       deterministically (1.0 / auto_confirmed); a future fuzzy/confidence engine
       writes lower-confidence / needs-review rows here additively.
@@ -105,12 +105,12 @@ models:
           - not_null
           - unique
       - name: match_id
-        description: "FK -> match.match_id (recomputed identically to match.sql)."
+        description: "FK -> int_match.match_id (recomputed identically to int_match.sql)."
         data_tests:
           - not_null
           - relationships:
               arguments:
-                to: ref('match')
+                to: ref('int_match')
                 field: match_id
       - name: espn_event_id
         description: "Raw ESPN event id (provider reference; NOT a match_id input). One link per event."
@@ -136,7 +136,7 @@ models:
               arguments:
                 values: ["auto_confirmed"]
 
-  - name: matchbook_event_link
+  - name: int_matchbook_event_link
     description: >
       Maps a canonical match to a Matchbook exchange event. Populated by the
       matchbook_conform Dagster asset via resolved-links Parquet (Spec 006).
@@ -148,11 +148,11 @@ models:
           - not_null
           - unique
       - name: match_id
-        description: "FK -> match.match_id. Includes new_canonical rows minted by conform engine."
+        description: "FK -> int_match.match_id. Includes new_canonical rows minted by conform engine."
         data_tests:
           - relationships:
               arguments:
-                to: ref('match')
+                to: ref('int_match')
                 field: match_id
       - name: matchbook_event_id
         description: "Raw Matchbook event id (provider reference). One link per event."
@@ -178,7 +178,7 @@ models:
               arguments:
                 values: ["auto_confirmed", "needs_review", "human_confirmed"]
 
-  - name: football_data_match_link
+  - name: int_football_data_match_link
     description: >
       Maps a canonical match to a football-data.co.uk source row via a composite
       natural key (the source has no stable match id).
@@ -188,7 +188,7 @@ models:
           - not_null
           - unique
       - name: match_id
-        description: "FK -> match.match_id."
+        description: "FK -> int_match.match_id."
       - name: family
         description: "'main' | 'extra' (which football-data.co.uk dataset family)."
       - name: country
@@ -204,7 +204,7 @@ models:
       - name: away_team
         description: "Raw source away team name."
 
-  - name: espn_team_link
+  - name: int_espn_team_link
     description: "Maps raw ESPN team references (ID and name) to canonical team_id."
     columns:
       - name: link_id
@@ -212,11 +212,11 @@ models:
           - not_null
           - unique
       - name: team_id
-        description: "FK -> team.team_id."
+        description: "FK -> int_team.team_id."
         data_tests:
           - relationships:
               arguments:
-                to: ref('team')
+                to: ref('int_team')
                 field: team_id
       - name: espn_team_id
         data_tests:
@@ -225,7 +225,7 @@ models:
         data_tests:
           - not_null
 
-  - name: espn_league_link
+  - name: int_espn_league_link
     description: "Maps raw ESPN league slugs to canonical league_id."
     columns:
       - name: link_id
@@ -233,17 +233,17 @@ models:
           - not_null
           - unique
       - name: league_id
-        description: "FK -> league.league_id."
+        description: "FK -> int_league.league_id."
         data_tests:
           - relationships:
               arguments:
-                to: ref('league')
+                to: ref('int_league')
                 field: league_id
       - name: espn_league_slug
         data_tests:
           - not_null
 
-  - name: matchbook_team_link
+  - name: int_matchbook_team_link
     description: "Maps Matchbook parsed team names to canonical team_id."
     columns:
       - name: link_id
@@ -251,12 +251,12 @@ models:
           - not_null
           - unique
       - name: team_id
-        description: "FK -> team.team_id."
+        description: "FK -> int_team.team_id."
       - name: matchbook_team_name
         data_tests:
           - not_null
 
-  - name: matchbook_league_link
+  - name: int_matchbook_league_link
     description: "Maps Matchbook sport/category to canonical league_id."
     columns:
       - name: link_id
@@ -264,4 +264,4 @@ models:
           - not_null
           - unique
       - name: league_id
-        description: "FK -> league.league_id."
+        description: "FK -> int_league.league_id."

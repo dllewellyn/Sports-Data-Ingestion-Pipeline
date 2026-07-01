@@ -11,6 +11,6 @@ select
     home_team,
     away_team,
     count(*) as n
-from {{ ref('football_data_match_link') }}
+from {{ ref('int_football_data_match_link') }}
 group by 1, 2, 3, 4, 5, 6, 7
 having count(*) > 1

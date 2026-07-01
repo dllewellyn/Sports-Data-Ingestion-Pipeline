@@ -14,7 +14,7 @@ resolved as (
 
 matches as (
     select match_id, home_team_id, away_team_id
-    from {{ ref('match') }}
+    from {{ ref('int_match') }}
 ),
 
 event_teams as (

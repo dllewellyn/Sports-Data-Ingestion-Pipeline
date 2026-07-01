@@ -12,14 +12,14 @@ from dagster import (
 from dagster_dbt import DbtCliResource
 
 from .assets.dbt import dbt_models, dbt_project
-from .assets.espn import espn_bronze
-from .assets.espn_postgres_migration import espn_postgres_migration
-from .assets.football_extra import football_extra
-from .assets.football_main import football_main
-from .assets.matchbook_conform import matchbook_conform
-from .assets.matchbook_events import matchbook_events_bronze
-from .assets.matchbook_postgres_migration import matchbook_postgres_migration
-from .assets.matchbook_t60 import matchbook_t60_enrichment
+from .assets.ingestion.espn import espn_bronze
+from .assets.ingestion.espn_postgres_migration import espn_postgres_migration
+from .assets.ingestion.football_extra import football_extra
+from .assets.ingestion.football_main import football_main
+from .assets.ingestion.matchbook_events import matchbook_events_bronze
+from .assets.ingestion.matchbook_postgres_migration import matchbook_postgres_migration
+from .assets.intermediate.matchbook_conform import matchbook_conform
+from .assets.intermediate.matchbook_t60 import matchbook_t60_enrichment
 from .espn.http_client import ThrottledHttpClient as EspnThrottledHttpClient
 from .football.http_client import ThrottledHttpClient
 from .otel import configure_telemetry
@@ -31,20 +31,20 @@ configure_telemetry()
 # Football bronze assets: separate, on-demand source (full backfill is ~705 files).
 football_assets = AssetSelection.assets(football_main, football_extra)
 
-# ESPN soccer flow: end-to-end source (bronze scoreboards -> dbt silver staging +
-# canonical conform + link models). Run via the dedicated `espn_job`. The dbt model
-# AssetKeys are `["silver","<model>"]` (verified from the manifest; NOT
-# `["silver","canonical",...]`); the `team_aliases` seed is an ESPN-conform input and
-# surfaces as `["silver","team_aliases"]`, so it rides with this source.
+# ESPN soccer flow: end-to-end source (bronze scoreboards -> dbt staging +
+# intermediate conform + link models). Run via the dedicated `espn_job`. The dbt model
+# AssetKeys are `["staging","<model>"]` for staging and `["intermediate","<model>"]` for
+# intermediate (verified from the manifest); the `team_aliases` seed surfaces as
+# `["staging","team_aliases"]`, so it rides with this source.
 espn_assets = AssetSelection.assets(
     espn_bronze,
-    AssetKey(["silver", "stg_espn_events"]),
-    AssetKey(["silver", "league"]),
-    AssetKey(["silver", "season"]),
-    AssetKey(["silver", "team"]),
-    AssetKey(["silver", "match"]),
-    AssetKey(["silver", "espn_match_link"]),
-    AssetKey(["silver", "team_aliases"]),
+    AssetKey(["staging", "stg_espn_events"]),
+    AssetKey(["intermediate", "int_league"]),
+    AssetKey(["intermediate", "int_season"]),
+    AssetKey(["intermediate", "int_team"]),
+    AssetKey(["intermediate", "int_match"]),
+    AssetKey(["intermediate", "int_espn_match_link"]),
+    AssetKey(["staging", "team_aliases"]),
 )
 
 # Matchbook events bronze ingest: standalone 6-hourly source.
@@ -59,9 +59,9 @@ espn_migration_assets = AssetSelection.assets(espn_postgres_migration)
 matchbook_conform_assets = AssetSelection.assets(
     matchbook_conform,
     matchbook_t60_enrichment,
-    AssetKey(["silver", "matchbook_event_link"]),
-    AssetKey(["silver", "canonical_match_export"]),
-    AssetKey(["silver", "canonical_team_export"]),
+    AssetKey(["intermediate", "int_matchbook_event_link"]),
+    AssetKey(["marts", "canonical_match_export"]),
+    AssetKey(["marts", "canonical_team_export"]),
 )
 
 
@@ -75,12 +75,12 @@ football_backfill_job = define_asset_job(
 )
 
 # ESPN runs end-to-end on a cadence: the bronze scoreboard ingest plus the dbt staging
-# + canonical conform + link models, so each run lands fresh scoreboards AND re-derives
+# + intermediate conform + link models, so each run lands fresh scoreboards AND re-derives
 # the canonical match/link rows. Every 6 hours.
 espn_job = define_asset_job(
     name="espn_ingestion",
     selection=espn_assets,
-    description="ESPN end-to-end: bronze scoreboards -> dbt staging + canonical conform + link.",
+    description="ESPN end-to-end: bronze scoreboards -> dbt staging + intermediate conform + link.",
 )
 
 espn_schedule = ScheduleDefinition(
@@ -109,7 +109,7 @@ matchbook_conform_job = define_asset_job(
     selection=matchbook_conform_assets,
     description=(
         "Matchbook conform layer: fuzzy-match events to canonical matches, "
-        "T-60 enrichment, and dbt rebuild of matchbook_event_link + match."
+        "T-60 enrichment, and dbt rebuild of int_matchbook_event_link + int_match."
     ),
 )
 

@@ -14,7 +14,7 @@ resolved as (
 
 matches as (
     select match_id, league_id
-    from {{ ref('match') }}
+    from {{ ref('int_match') }}
 ),
 
 event_leagues as (

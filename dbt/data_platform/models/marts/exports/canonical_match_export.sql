@@ -18,6 +18,6 @@ select
     m.kickoff_time,
     ht.name as home_team_name,
     away_t.name as away_team_name
-from {{ ref('match') }} m
-left join {{ ref('team') }} ht on m.home_team_id = ht.team_id
-left join {{ ref('team') }} away_t on m.away_team_id = away_t.team_id
+from {{ ref('int_match') }} m
+left join {{ ref('int_team') }} ht on m.home_team_id = ht.team_id
+left join {{ ref('int_team') }} away_t on m.away_team_id = away_t.team_id

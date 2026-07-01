@@ -11,7 +11,7 @@ from datetime import date
 import pytest
 from dagster import AssetKey
 
-import data_platform.assets.espn as espn_asset_module
+import data_platform.assets.ingestion.espn as espn_asset_module
 from data_platform.espn.asset_results import to_materialize_result
 from data_platform.espn.discovery import EspnUnit
 from data_platform.espn.ingest import IngestionReport, UnitResult, espn_out_path

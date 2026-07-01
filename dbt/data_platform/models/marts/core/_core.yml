@@ -1,0 +1,5 @@
+version: 2
+
+models:
+  - name: fct_completed_matches
+    description: "One row per completed match with all human-readable data points joined in."

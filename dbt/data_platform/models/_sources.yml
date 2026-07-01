@@ -49,6 +49,20 @@ sources:
           - name: event_participant_id
           - name: kickoff_ms
 
+      - name: matchbook_events
+        description: "Matchbook open events bronze Parquet (football + rugby union). Written by the matchbook_events_bronze Dagster asset."
+        meta:
+          external_location: "read_parquet('{{ env_var(\"DATA_DIR\", \"/app/data\") }}/bronze/matchbook_events/**/*.parquet', union_by_name=true)"
+        columns:
+          - name: event_id
+            description: "Matchbook exchange event ID"
+          - name: event_name
+            description: "Event name (e.g. 'Arsenal vs Chelsea')"
+          - name: sport_id
+            description: "Matchbook sport ID (15 = football)"
+          - name: raw_event
+            description: "Complete raw event JSON"
+
       - name: matchbook_resolved_links
         description: "Resolved Matchbook event → canonical match links. Written by the matchbook_conform Dagster asset."
         meta:

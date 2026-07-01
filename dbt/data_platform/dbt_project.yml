@@ -15,21 +15,22 @@ clean-targets:
 models:
   data_platform:
     +database: lake
-    silver:
+    staging:
       +materialized: view
-      +schema: silver
-      # Canonical domain tables (team/league/match + link tables) are real,
-      # writable relations, not transforms — materialize them as tables.
-      canonical:
-        +materialized: table
-    gold:
+      +schema: staging
+    intermediate:
       +materialized: table
-      +schema: gold
+      +schema: intermediate
+    marts:
+      +materialized: table
+      +schema: marts
+      exports:
+        +materialized: external
 
 seeds:
   data_platform:
     +database: lake
-    +schema: silver
+    +schema: staging
     team_aliases:
       # Curated canonical-team + alias seed: one row per (team, alias). The
       # conform `team` model joins incoming names to `alias` to resolve a stable
