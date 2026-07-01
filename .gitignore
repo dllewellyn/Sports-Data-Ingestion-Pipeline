@@ -79,3 +79,4 @@ investigations/*/evidence/samples/
 # OS
 .DS_Store
 Thumbs.db
+*.pyc

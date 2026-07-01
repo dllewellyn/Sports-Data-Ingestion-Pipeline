@@ -1,5 +1,9 @@
 # Run on every commit: `uv run pre-commit install` once to enable the git hook.
 # Manual full run: `uv run pre-commit run --all-files`.
+
+# dark-factory/ holds relocated vendored agent tooling; not project source.
+exclude: '^dark-factory/'
+
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.20

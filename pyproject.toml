@@ -68,6 +68,8 @@ addopts = "--import-mode=importlib"
 line-length = 100
 target-version = "py312"
 src = ["src"]
+# dark-factory/ holds relocated vendored agent tooling; not project source.
+extend-exclude = ["dark-factory"]
 
 [tool.ruff.lint]
 # pycodestyle (PEP 8) + pyflakes + isort + pyupgrade + bugbear + comprehensions + simplify
