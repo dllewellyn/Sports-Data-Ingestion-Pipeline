@@ -12,7 +12,7 @@ con = duckdb.connect()
 # No DATA_PATH — DuckLake reads the registered path from the PostgreSQL catalog.
 con.execute(f"ATTACH 'ducklake:{POSTGRES_CATALOG_URL}' AS lake")
 con.execute("INSTALL ui; LOAD ui")
-con.execute("CALL start_ui(open := false, host := '0.0.0.0', port := 4213)")
+con.execute("CALL start_ui()")
 
 # Block so the container stays alive while the UI web server runs in the background.
 while True:
