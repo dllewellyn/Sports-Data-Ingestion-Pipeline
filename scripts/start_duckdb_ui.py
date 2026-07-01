@@ -7,10 +7,10 @@ import time
 import duckdb
 
 POSTGRES_CATALOG_URL = os.environ["POSTGRES_CATALOG_URL"]
-DATA_DIR = os.environ.get("DATA_DIR", "/app/data")
 
 con = duckdb.connect()
-con.execute(f"ATTACH 'ducklake:{POSTGRES_CATALOG_URL}' AS lake (DATA_PATH '{DATA_DIR}')")
+# No DATA_PATH — DuckLake reads the registered path from the PostgreSQL catalog.
+con.execute(f"ATTACH 'ducklake:{POSTGRES_CATALOG_URL}' AS lake")
 con.execute("INSTALL ui; LOAD ui")
 con.execute("CALL start_ui(open := false, host := '0.0.0.0', port := 4213)")
 
