@@ -62,6 +62,8 @@ matchbook_conform_assets = AssetSelection.assets(
     AssetKey(["intermediate", "int_matchbook_event_link"]),
     AssetKey(["marts", "canonical_match_export"]),
     AssetKey(["marts", "canonical_team_export"]),
+    AssetKey(["marts", "canonical_league_export"]),
+    AssetKey(["marts", "canonical_season_export"]),
 )
 
 

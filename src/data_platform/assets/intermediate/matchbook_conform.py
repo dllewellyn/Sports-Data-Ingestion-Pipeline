@@ -31,6 +31,8 @@ def _ensure_empty_parquet(path, columns: list[str]) -> None:
         AssetKey(["matchbook_events_bronze"]),
         AssetKey(["marts", "canonical_match_export"]),
         AssetKey(["marts", "canonical_team_export"]),
+        AssetKey(["marts", "canonical_league_export"]),
+        AssetKey(["marts", "canonical_season_export"]),
     ],
     description=(
         "Matchbook conform: fuzzy-matches football events to canonical matches, "
