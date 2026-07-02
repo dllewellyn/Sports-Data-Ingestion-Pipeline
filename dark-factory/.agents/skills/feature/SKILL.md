@@ -69,6 +69,16 @@ below. Improvement-review is propose-only. Self-learn runs after every phase.
    `investigation` first.
 4. **Load governance:** `.specify/memory/constitution.md` (canonical) and any project `CLAUDE.md` /
    `ARCHITECTURE.md`. Every phase's output is judged against the constitution.
+4b. **Check for pre-existing uncommitted work before any phase edits a file.** Once a plan exists (or,
+   on resume, immediately), run `git status --short` and `git diff --stat` and compare against the
+   plan's *Source layout touched* list (or, pre-plan, against the feature description's likely files).
+   If uncommitted changes already sit in a file this feature is about to edit, do **not** silently edit
+   on top of them or silently fold them into this feature's commits — that breaks atomic-commit hygiene
+   and misattributes work that isn't this feature's. Surface it via `blocker-protocol.md` (it is a
+   concrete instance of "touches something outside the feature's scope") and let the user choose:
+   commit the pre-existing work separately first, leave it and stage narrowly (`git add -p`), or pause
+   entirely if it's still in-progress work elsewhere. Re-run this check at the start of the
+   Implementation phase too, since time may have passed since Plan.
 5. State the plan of record in one line (which phases run, that the run is autonomous and pauses only
    on a blocker) and begin — do not wait for approval to start; autonomy was chosen.
 6. **Open the run trace (telemetry).** Run `bash .agents/skills/_shared/telemetry/run-context.sh init`
