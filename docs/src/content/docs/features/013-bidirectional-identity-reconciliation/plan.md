@@ -97,8 +97,8 @@ specs/013-bidirectional-identity-reconciliation/
 
 | Work area | Skill to use | Status |
 |---|---|---|
-| New dbt model/macro change + tests | (no dedicated build skill) | MISSING — proceed from existing repo pattern (`ARCHITECTURE.md` intermediate-model guide, `int_espn_team_link.sql`/`canonical_match_id.sql` as the nearest analogues); run `self-learn` after the build since this exact kind of work has now recurred across specs 006/008/010/012/013 without a dedicated skill |
-| New Dagster asset module + job wiring | (no dedicated build skill) | MISSING — proceed from `assets/intermediate/matchbook_conform.py` / `matchbook_t60.py` as the nearest analogues; same `self-learn` follow-up |
+| New dbt model/macro change + tests (S2, S3) | `dbt-model-build` | available — **provisioned this run** via the B2 capability-provisioning gate (`.agents/skills/dbt-model-build/SKILL.md`); S2/S3 MUST invoke it rather than re-deriving the `source()`-vs-raw-literal / macro / singular-test conventions from scratch |
+| New Dagster asset module + job wiring (S6, S7) | `dagster-asset-build` | available — **provisioned this run** (`.agents/skills/dagster-asset-build/SKILL.md`); S6/S7 MUST invoke it, in particular its mandatory daemon/queued-run verification standard for S7 |
 | Architecture conformance of the change | `code-architecture-review` | available |
 | Per-step diff review | `code-review` | available |
 | Verify the change actually runs (Dagster daemon/queued run) | `verify` / `run` | available |
@@ -106,12 +106,14 @@ specs/013-bidirectional-identity-reconciliation/
 | Execution of this plan's tasks | `implementor` (downstream, after `tasks`) | available |
 
 No skill is silently assumed beyond this session's confirmed inventory (project + global + plugin
-skills surfaced this session). Both MISSING rows are genuinely repeatable work classes for this repo
-(a fourth spec touching the same `int_team`/`int_match`/conform-asset shape); flagged per
-`skill-discovery.md` rather than proceeding silently. Given the shape is already well-precedented in
-three prior specs, this plan proceeds without creating a new skill now and defers the
-create-a-skill decision to the post-build `self-learn` pass, rather than detouring into
-`skill-creator` mid-plan for an unrequested tooling investment.
+skills surfaced this session). The two gaps flagged during initial planning (no dedicated dbt-model
+-build or Dagster-asset-build skill, despite this exact shape of work recurring across specs
+006/008/010/012/013) were closed via the `feature` skill's B2 capability-provisioning gate, using
+`skill-creator` in lightweight/no-eval-loop mode (both are narrow, deterministic, repo-internal
+procedural skills, not general-purpose skills needing trigger-accuracy optimization). Both new skills
+were fact-checked against the current codebase while being written (the `CircularDependencyError`
+constraint, the thin-wrapper pattern, the config-collision rule, the daemon/queued-run standard) —
+see `.agents/skills/dbt-model-build/SKILL.md` and `.agents/skills/dagster-asset-build/SKILL.md`.
 
 ## Convention & rule audit (resolved before implementation)
 
@@ -192,10 +194,12 @@ existing pattern already in the tree; no new rule needs authoring before impleme
 - **Goal:** Pure function fuzzy-matching a set of raw names against the canonical team pool, applying
   the confirmed confidence policy (User Story 2).
 - **Spec trace:** User Story 2 (all 4 acceptance scenarios), FR-001–FR-005, FR-011 (no seed write-back).
-- **Red (failing test first):** `tests/conform/test_reconcile.py` — five cases (high-confidence bridge,
+- **Red (failing test first):** `tests/conform/test_reconcile.py` — six cases (high-confidence bridge,
   medium-confidence `needs_review` bridge, below-threshold no-bridge, tied-candidates no-bridge,
-  already-seeded name excluded), each asserting on `find_learned_aliases`'s output shape/tags; all fail
-  with `ImportError` before the module exists.
+  already-seeded name excluded, and — FR-011 — `team_aliases.csv`'s mtime/content asserted unchanged
+  after calling `find_learned_aliases`, not merely inspected by self-review), each asserting on
+  `find_learned_aliases`'s output shape/tags or the seed file's untouched state; all fail (`ImportError`
+  for the first five, or a missing-assertion no-op for the sixth) before the module exists.
 - **Implementation:** `find_learned_aliases(raw_names: pd.Series, canonical_teams: pd.DataFrame,
   high_threshold=HIGH_THRESHOLD, medium_threshold=MEDIUM_THRESHOLD) -> pd.DataFrame` — for each raw
   name, score against `canonical_teams.name` and each entry of `canonical_teams.similar_names` via
@@ -203,7 +207,7 @@ existing pattern already in the tree; no new rule needs authoring before impleme
   decision, return `raw_name, team_id, confidence, match_method` rows (no `source_provider` — the
   caller stamps that, since one call handles one provider's names at a time). No I/O, no DuckLake
   (mirrors `resolve.py`'s discipline).
-- **Green criterion:** `PYTHONPATH=src uv run pytest tests/conform/test_reconcile.py` passes, all 5
+- **Green criterion:** `PYTHONPATH=src uv run pytest tests/conform/test_reconcile.py` passes, all 6
   cases green.
 - **Guardrails to satisfy:** ruff clean; no DuckLake connection (static check — no `duckdb` import in
   `reconcile.py`).
@@ -213,6 +217,7 @@ existing pattern already in the tree; no new rule needs authoring before impleme
   anywhere in the module (FR-011).
 
 ### Step S2 — dbt macro `resolve_team_id_expr` + singular test for its shape
+- **Skill:** invoke `dbt-model-build` for the macro-writing and singular-test conventions.
 - **Goal:** One macro implementing `coalesce(seed, learned, self-mint)`, callable identically from all
   three SQL sites, plus a non-tautological singular test proving the shape (mirrors
   `assert_resolver_provider_agnostic.sql`'s independent-reconstruction pattern).
@@ -237,6 +242,8 @@ existing pattern already in the tree; no new rule needs authoring before impleme
   breaking it once and observing red.
 
 ### Step S3 — Wire the macro + raw `read_parquet()` bridge read into the three dbt call sites
+- **Skill:** invoke `dbt-model-build` for the `source()`-vs-raw-literal decision procedure (its
+  `CircularDependencyError` section is exactly this step's situation).
 - **Goal:** `int_team.sql`, `int_match.sql`'s `espn_matches` CTE, and `int_espn_team_link.sql` each
   resolve ESPN raw names through the new three-tier formula, reading
   `data/silver/learned_team_aliases.parquet` via a raw `read_parquet()` literal (never `{{ source(...)
@@ -317,6 +324,8 @@ existing pattern already in the tree; no new rule needs authoring before impleme
   red — proving it's a genuine independent check, not a duplicate of S4's test.
 
 ### Step S6 — `identity_reconciliation` Dagster asset
+- **Skill:** invoke `dagster-asset-build` for the thin-wrapper, bootstrap-empty, and config-property
+  conventions.
 - **Goal:** The end-to-end asset: read both providers' raw bronze names, read the canonical team pool,
   call `find_learned_aliases` per provider, bootstrap-write-empty then write
   `data/silver/learned_team_aliases.parquet`.
@@ -351,6 +360,8 @@ existing pattern already in the tree; no new rule needs authoring before impleme
   test (first-ever-run case, mirroring `matchbook_conform`'s own bootstrap test coverage).
 
 ### Step S7 — `definitions.py` wiring: job selections, `deps=`, and the empirical orchestration guardrail
+- **Skill:** invoke `dagster-asset-build` — its mandatory daemon/queued-run verification standard IS
+  this step's green criterion, not merely `dagster definitions validate`.
 - **Goal:** `identity_reconciliation` is materialized in both `espn_job` and `matchbook_job`;
   `matchbook_conform` gains a real same-run dependency on it; both jobs launch cleanly through the real
   daemon/queued path with no `CircularDependencyError`.
