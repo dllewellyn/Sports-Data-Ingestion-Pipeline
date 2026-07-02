@@ -43,7 +43,12 @@ def test_espn_bronze_asset_and_resource_registered() -> None:
 
     asset_keys: set[AssetKey] = set()
     for assets_def in defs.assets:
-        asset_keys |= set(assets_def.keys)
+        # AssetsDefinition exposes `.keys`; SourceAsset (e.g. matchbook_odds_bronze)
+        # exposes a single `.key`.
+        if hasattr(assets_def, "keys"):
+            asset_keys |= set(assets_def.keys)
+        else:
+            asset_keys.add(assets_def.key)
     assert AssetKey(["espn_bronze"]) in asset_keys
 
     assert "espn_http" in defs.resources

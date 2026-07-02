@@ -94,7 +94,12 @@ def test_definitions_registers_football_assets_resource_and_job() -> None:
 
     asset_keys: set[AssetKey] = set()
     for assets_def in defs.assets:
-        asset_keys |= set(assets_def.keys)
+        # AssetsDefinition exposes `.keys`; SourceAsset (e.g. matchbook_odds_bronze)
+        # exposes a single `.key`.
+        if hasattr(assets_def, "keys"):
+            asset_keys |= set(assets_def.keys)
+        else:
+            asset_keys.add(assets_def.key)
     assert AssetKey(["football_main"]) in asset_keys
     assert AssetKey(["football_extra"]) in asset_keys
 

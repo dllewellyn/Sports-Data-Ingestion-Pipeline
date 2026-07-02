@@ -16,6 +16,7 @@ from .assets.ingestion.espn import espn_bronze
 from .assets.ingestion.football_extra import football_extra
 from .assets.ingestion.football_main import football_main
 from .assets.ingestion.matchbook_events import matchbook_events_bronze
+from .assets.ingestion.matchbook_odds import matchbook_odds_bronze, odds_stream_fresh
 from .assets.intermediate.matchbook_conform import matchbook_conform
 from .assets.intermediate.matchbook_t60 import matchbook_t60_enrichment
 from .assets.migration.espn import espn_postgres_migration
@@ -49,6 +50,13 @@ espn_assets = AssetSelection.assets(
 
 # Matchbook events bronze ingest: standalone 6-hourly source.
 matchbook_events_assets = AssetSelection.assets(matchbook_events_bronze)
+
+# Matchbook odds bronze: an observable source asset over the out-of-band
+# ingestor daemon's Parquet output. The observe job records freshness (age of
+# the newest tick file) and runs the freshness check; it never materializes.
+matchbook_odds_observe_assets = AssetSelection.assets(
+    matchbook_odds_bronze.key
+) | AssetSelection.checks_for_assets(matchbook_odds_bronze.key)
 
 # One-off migration assets.
 matchbook_migration_assets = AssetSelection.assets(matchbook_postgres_migration)
@@ -104,6 +112,20 @@ matchbook_events_schedule = ScheduleDefinition(
     cron_schedule="0 */6 * * *",
 )
 
+# Matchbook odds freshness: observe the daemon's bronze output + run the freshness
+# check every 15 minutes. Cheap (stats the newest Parquet file); no materialization.
+matchbook_odds_observe_job = define_asset_job(
+    name="matchbook_odds_observe",
+    selection=matchbook_odds_observe_assets,
+    description="Observe matchbook_odds bronze freshness (age of the newest tick Parquet).",
+)
+
+matchbook_odds_observe_schedule = ScheduleDefinition(
+    name="matchbook_odds_observe_schedule",
+    job=matchbook_odds_observe_job,
+    cron_schedule="*/15 * * * *",
+)
+
 # Matchbook conform job: runs 1 hour after matchbook_events_ingestion so the bronze lake
 # is fresh before conform runs.
 matchbook_conform_job = define_asset_job(
@@ -128,20 +150,24 @@ defs = Definitions(
         football_extra,
         espn_bronze,
         matchbook_events_bronze,
+        matchbook_odds_bronze,
         matchbook_postgres_migration,
         espn_postgres_migration,
         matchbook_conform,
         matchbook_t60_enrichment,
     ],
+    asset_checks=[odds_stream_fresh],
     jobs=[
         football_backfill_job,
         espn_job,
         matchbook_events_job,
+        matchbook_odds_observe_job,
         matchbook_conform_job,
     ],
     schedules=[
         espn_schedule,
         matchbook_events_schedule,
+        matchbook_odds_observe_schedule,
         matchbook_conform_schedule,
     ],
     resources={

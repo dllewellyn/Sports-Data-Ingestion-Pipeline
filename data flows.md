@@ -28,8 +28,16 @@ Raw data written as Parquet, one file per logical partition. No enrichment or jo
 - Each row: `event_id`, `event_name`, `sport_id`, `status`, `start_utc`, `volume`, `raw_event` JSON.
 
 ### Matchbook odds (Redis ingestor — separate service)
-- Scrapes live price ticks from Matchbook and writes `data/bronze/matchbook/<date>/*.parquet`
+- A long-lived daemon (`matchbook/ingestor/`, the `matchbook-ingestor` compose service)
+  subscribes to the Redis `matchbook_odds_stream` pub/sub channel and writes ZSTD Parquet
+  to `data/bronze/matchbook_odds/year=YYYY/month=MM/day=DD/part-<ts>.parquet` (flush every
+  5 000 ticks or 60 s).
 - Each row: `event_id`, `market_id`, `runner_id`, `ingested_at`, `best_back_price`, `best_lay_price`, depths, volumes, WoM, `kickoff_ms`.
+- Because it runs continuously (not a batch pull), Dagster does **not** materialize it. Its
+  output is represented by the `matchbook_odds_bronze` **observable source asset** — this
+  gives `stg_matchbook_odds` a real upstream node in the asset graph and records freshness
+  (age of the newest tick Parquet) via the `matchbook_odds_observe` job + its `odds_stream_fresh`
+  check (WARNs when no ticks have landed for over an hour).
 
 ### One-off migrations
 - **`matchbook_postgres_migration`**: extracted historic Matchbook events from the sports-gaming-engine PostgreSQL (`bronze.provider_match_cache`) into the same bronze Parquet format. Run once.

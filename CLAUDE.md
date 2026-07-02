@@ -182,7 +182,24 @@ raw_users ──▶ silver/stg_users ──▶ gold/dim_users_by_city ──▶ 
   Registered in `dbt/data_platform/seeds/_seeds.yml` (the first `_seeds.yml` in the repo).
 - **The bronze→silver edge is wired by `BronzeAwareTranslator`** in `assets/dbt.py`,
   which maps the dbt source `users` to `AssetKey(["raw_users"])`. Renaming the
-  bronze asset or the dbt source breaks the lineage link.
+  bronze asset or the dbt source breaks the lineage link. **Every dbt bronze source
+  a model reads must have an entry in `_SOURCE_ASSET_KEYS` pointing at its producer,
+  or the asset-graph edge silently doesn't form** (the source becomes a dangling
+  external key). This is easy to miss — `dagster definitions validate` stays green
+  either way; verify with `defs.resolve_asset_graph()` and check the staging model's
+  `parent_keys`.
+- **A continuously-running producer (e.g. the `matchbook-ingestor` Redis daemon) is
+  modelled as an `@observable_source_asset`, NOT a materializing `@asset`.** A
+  materialization run must terminate, and micro-batching a fire-and-forget pub/sub
+  stream would drop ticks. `matchbook_odds_bronze` (`assets/ingestion/matchbook_odds.py`)
+  observes the daemon's bronze Parquet: it gives `stg_matchbook_odds` a real upstream
+  node and records freshness (newest-file age) + a WARN-severity `odds_stream_fresh`
+  check, run by the `matchbook_odds_observe` job/schedule. The freshness check is WARN
+  (not ERROR) on purpose — odds only stream during live markets, so a hard SLA would
+  false-alarm overnight. To schedule a source-asset observation + its check, select by
+  key: `AssetSelection.assets(<AssetKey>) | AssetSelection.checks_for_assets(<AssetKey>)`
+  — pass the **`AssetKey`**, not the `SourceAsset` object (`AssetSelection.assets(<SourceAsset>)`
+  raises `CheckError: Unexpected type for AssetKey`).
 - **Do not add `from __future__ import annotations` to asset modules.** Dagster
   introspects `context`/return annotations at runtime; stringized annotations make
   it raise `DagsterInvalidDefinitionError`.

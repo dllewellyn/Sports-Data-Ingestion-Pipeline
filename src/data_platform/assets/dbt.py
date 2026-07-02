@@ -31,6 +31,11 @@ class BronzeAwareTranslator(DagsterDbtTranslator):
     # dbt source name -> upstream Dagster bronze asset key.
     _SOURCE_ASSET_KEYS = {
         "espn_events": AssetKey(["espn_bronze"]),
+        # matchbook_odds is produced out-of-band by the matchbook-ingestor daemon;
+        # matchbook_odds_bronze is the observable source asset standing in for it.
+        "matchbook_odds": AssetKey(["matchbook_odds_bronze"]),
+        # matchbook_events is produced by the matchbook_events_bronze Dagster asset.
+        "matchbook_events": AssetKey(["matchbook_events_bronze"]),
         # matchbook_resolved_links is produced by the matchbook_conform Python asset (Spec 006)
         "matchbook_resolved_links": AssetKey(["matchbook_conform"]),
     }
