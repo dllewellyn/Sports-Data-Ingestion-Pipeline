@@ -71,7 +71,16 @@ def _start_proxy() -> None:
         srv.serve_forever()
 
 
-con = duckdb.connect()
+# The UI's primary connection is a small PERSISTENT file, not ":memory:". The
+# DuckDB Local UI persists its "app state" (notebooks, settings, the local user
+# record) into its primary database; against a pure in-memory instance it has
+# nowhere to initialise that store and fails in the browser with
+# "Failed to resolve app state with user - RangeError: Offset is outside the
+# bounds of the DataView". This file is opened ONLY by the duckdb-ui service, so
+# it does NOT reintroduce the warehouse.duckdb single-writer lock problem (nothing
+# else touches it). The DuckLake catalog `lake` is attached as a secondary DB so
+# the pipeline data is still browsable.
+con = duckdb.connect("/app/data/ui_state.duckdb")
 # No DATA_PATH — DuckLake reads the registered path from the PostgreSQL catalog.
 con.execute(f"ATTACH 'ducklake:{POSTGRES_CATALOG_URL}' AS lake")
 con.execute("INSTALL ui; LOAD ui")
