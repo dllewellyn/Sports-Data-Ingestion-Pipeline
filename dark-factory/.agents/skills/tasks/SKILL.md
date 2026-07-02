@@ -49,8 +49,23 @@ If there is no approved `plan.md`, run `plan` first — do not invent tasks with
 2. **Phase 2 — Foundational:** shared prerequisites that block all user stories (base models/contracts,
    shared infrastructure) become Foundational tasks.
 3. **Phases 3+ — per user story (P1, P2, …):** for each prioritised story in the spec, emit the plan
-   steps that satisfy it. **Within a story, the failing-test task precedes its implementation task**
+   steps that satisfy it, **in priority order (P1 first)** — never reorder whole story phases to work
+   around a dependency. **Within a story, the failing-test task precedes its implementation task**
    (the plan step's red before its green). Models before services before wiring.
+   - **If the plan's Sequencing section shows a higher-priority story's step depending on a
+     lower-priority story's step** (e.g. P1's proof step needs P2's core function to exist first),
+     that dependency is a signal the depended-on step is **Foundational, not story-exclusive** — split
+     it: the load-bearing minimum P1 needs (a real, non-stubbed implementation proving the case(s) P1
+     actually exercises) moves into Phase 2 (Foundational); the remaining story-specific scenarios that
+     differentiate the lower-priority story (edge cases, refusal paths, completeness claims the spec's
+     own "Why this priority" text says aren't required for the higher-priority story) stay in that
+     story's own later phase, proven against the already-Foundational implementation. This keeps every
+     story phase provably independently testable (per `specification/references/authoring-guide.md`'s
+     definition — each story's OWN acceptance scenarios separately verifiable) while still letting P1
+     run immediately after Foundational, undelayed by P2/P3 phases that don't actually gate it.
+     Reordering entire story phases instead of doing this split is a process deviation, not an
+     acceptable adaptation — it was caught by an adherence review on spec 013
+     (`specs/013-bidirectional-identity-reconciliation/`) and re-delegated.
 4. **Final — Polish:** cross-cutting cleanup, docs, `quickstart.md` validation.
 
 ### 2. Number, mark, and reference
