@@ -10,6 +10,10 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Repo root, derived from this file's location (src/data_platform/config.py) so
+# repo-tree assets (dbt seeds) resolve regardless of the process CWD.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -130,13 +134,21 @@ class Settings(BaseSettings):
 
     @property
     def team_aliases_seed_path(self) -> Path:
-        """dbt team_aliases seed CSV (team_id, canonical_name, alias) the mint reads."""
-        return Path("dbt/data_platform/seeds/team_aliases.csv")
+        """dbt team_aliases seed CSV (team_id, canonical_name, alias) the mint reads.
+
+        Anchored to the repo root — a seed lives in the repo tree, not under
+        DATA_DIR — so it resolves regardless of the process CWD.
+        """
+        return _REPO_ROOT / "dbt" / "data_platform" / "seeds" / "team_aliases.csv"
 
     @property
     def league_aliases_seed_path(self) -> Path:
-        """dbt league_aliases seed CSV (league_id, canonical_name, provider, provider_key)."""
-        return Path("dbt/data_platform/seeds/league_aliases.csv")
+        """dbt league_aliases seed CSV (league_id, canonical_name, provider, provider_key).
+
+        Anchored to the repo root — a seed lives in the repo tree, not under
+        DATA_DIR — so it resolves regardless of the process CWD.
+        """
+        return _REPO_ROOT / "dbt" / "data_platform" / "seeds" / "league_aliases.csv"
 
 
 settings = Settings()
