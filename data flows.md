@@ -39,10 +39,6 @@ Raw data written as Parquet, one file per logical partition. No enrichment or jo
   (age of the newest tick Parquet) via the `matchbook_odds_observe` job + its `odds_stream_fresh`
   check (WARNs when no ticks have landed for over an hour).
 
-### One-off migrations
-- **`matchbook_postgres_migration`**: extracted historic Matchbook events from the sports-gaming-engine PostgreSQL (`bronze.provider_match_cache`) into the same bronze Parquet format. Run once.
-- **`espn_postgres_migration`**: extracted 955 historic ESPN events from `bronze.espn_restored_summaries` + supplementary `provider_match_cache` rows. Run once.
-
 ---
 
 ## Silver layer — canonical model (dbt + Python)
@@ -153,7 +149,7 @@ stg_matchbook_odds (market_id, runner_id, best_back_price, ingested_at, kickoff_
 - A new data source is added (new bronze asset)
 - A new dbt model is added to the silver or gold layer
 - The conform or enrichment logic changes materially
-- Row counts change significantly (after a bulk migration or new league coverage)
+- Row counts change significantly (after a bulk backfill or new league coverage)
 - A gold analytics model is built
 
 This file is the primary reference for understanding how the pipeline fits together end-to-end.

@@ -201,7 +201,7 @@ defs = Definitions(
 | `test_contracts.py` | Valid dict validates; missing required field raises; frame missing `raw_event` raises SchemaError |
 | `test_ingest.py` | `authenticate` happy path; ValueError on missing token; 401 raises; empty creds raises before HTTP; pagination accumulates; zero events returns None; `raw_event` round-trip recovers non-projected field (e.g. `markets`); atomic write (no partial on failure); replay appends new file; per-record failures counted + NOT raised; `run_*_ingest` re-raises at end |
 | `test_asset.py` | Asset key/group correct; `from __future__` absent (via `inspect.getsource`); success returns `MaterializeResult`; failure re-raises |
-| `tests/test_definitions.py` | Job registered; schedule cron correct; **two-part exclusion**: asset IS in `AssetSelection.all()` AND is NOT in `medallion_hello_world` (CLAUDE.md) |
+| `tests/test_definitions.py` | Asset + resource registered; dedicated job registered with an **exact** `AssetSelection.assets(...)` key set (assert `job_keys == EXPECTED_KEYS`, not just membership); schedule cron correct and targeting the job |
 
 ## Output path pattern
 

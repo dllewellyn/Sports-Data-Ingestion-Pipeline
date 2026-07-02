@@ -20,26 +20,30 @@ persisted as **Apache Parquet** and full **OpenTelemetry** tracing wired for
 | Notebooks | **JupyterLab** | Remote-accessible at `:8888`. |
 | Observability | **OpenTelemetry → SigNoz** | Apps export OTLP directly; dev runs self-hosted SigNoz in-stack, prod targets an external collector. |
 
-## Medallion flow (hello-world)
+## Medallion flow
 
 ```
-                 raw_users (Dagster asset)              dbt build (Dagster: dbt_assets)            publish_gold_parquet
- source API ───▶ requests + Pydantic + Pandera ──▶  bronze ──▶ silver (view) ──▶ gold (table)  ──▶ gold Parquet ──▶ (Dagster asset)
-                 data/bronze/users.parquet            stg_users      dim_users_by_city            data/gold/users_by_city.parquet
-                 [OTel span]                          [dbt tests on silver + gold]                 [OTel span]
+ sources ──▶ bronze (Parquet)         ──▶ silver / canonical (dbt + Python)      ──▶ gold (marts)
+ ESPN        espn_bronze                  stg_espn_events, stg_matchbook_odds        fct_completed_matches
+ Matchbook   matchbook_events_bronze      int_{league,season,team,match}            + *_export (external Parquet)
+ events      matchbook_odds_bronze        int_*_link (per-provider link tables)
+ + odds      football_{main,extra}        matchbook_conform + matchbook_t60
+ football    [Pydantic + Pandera]         [dbt tests + relationships]                [dbt tests]
 ```
 
-- **Bronze** — `raw_users` pulls users from the source API, validates every record
-  (Pydantic) and the whole frame (Pandera), and writes `data/bronze/users.parquet`.
-- **Silver** — dbt view `stg_users` cleans/conforms the bronze Parquet (read directly
-  by dbt-duckdb as an external source). Tested: `user_id` not-null + unique, `email`/`city` not-null.
-- **Gold** — dbt table `dim_users_by_city` aggregates users per city (tested), and the
-  dbt `external` model `users_by_city_export` writes `data/gold/users_by_city.parquet`.
-- **Publish** — `publish_gold_parquet` reads the gold Parquet and emits a gold-layer span.
+- **Bronze** — `assets/ingestion/*` are the only assets that touch the network. Each
+  validates every record (Pydantic) and the whole frame (Pandera) and writes faithful
+  `data/bronze/**/*.parquet`. See [`data flows.md`](data%20flows.md) for the per-source detail.
+- **Silver / canonical** — a **symmetric cross-provider conform layer**: ESPN conforms in
+  dbt SQL and is the union base of the canonical `int_*` models; other providers (Matchbook
+  live, football-data scaffolded) conform in Python and contribute rows *additively*. The
+  `int_*_link` tables tie each provider's events back to canonical `match_id`.
+- **Gold (marts)** — `fct_completed_matches` and the `*_export` external models write
+  `data/gold/*.parquet` for notebooks to read.
 
-> **Single-writer note:** DuckDB is single-writer. dbt owns the warehouse file; the
-> gold Parquet is produced *by dbt* (external materialization) rather than by a second
-> process reopening the warehouse, which avoids cross-process catalog races.
+> **Single-writer note:** dbt owns the DuckLake catalog; Python assets read/write Parquet
+> files, never the catalog directly. The gold Parquet is produced *by dbt* (external
+> materialization), which avoids cross-process catalog races.
 
 ## Quick start
 
@@ -56,10 +60,10 @@ Then, from any machine on your network:
 | JupyterLab | `http://<host>:8888` | `JUPYTER_TOKEN` from `.env` |
 | OTLP collector | `<host>:4317` (gRPC) / `:4318` (HTTP) | — |
 
-**Run the hello-world flow:** open the Dagster UI → **Jobs → `medallion_hello_world`
-→ Materialize all** (or **Assets → Materialize all**). Watch bronze → silver → gold
-build, dbt tests pass, and the gold Parquet appear. A daily schedule
-(`medallion_daily`, 06:00) ships disabled — toggle it on in the UI.
+**Run a source flow:** open the Dagster UI → **Jobs** and pick one — `espn_ingestion`
+(bronze scoreboards → dbt staging + canonical int_* models, every 6h), `matchbook_events_ingestion`,
+`matchbook_conform_job`, or `football_backfill` (on-demand, ~705 files). Each source has its
+own schedule (see `definitions.py`); `matchbook_odds_observe` just records odds freshness.
 
 Then open `notebooks/explore.ipynb` in JupyterLab to query the layers with DuckDB.
 
@@ -71,10 +75,10 @@ export PYTHONPATH=src DATA_DIR="$PWD/data" DUCKDB_PATH="$PWD/data/warehouse.duck
        DAGSTER_HOME="$PWD/.dagster" OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4317"
 uv run dagster dev -m data_platform.definitions          # UI at http://localhost:3000
 
-# or run the whole flow headless (parse dbt first to build the manifest;
+# or run a job headless (parse dbt first to build the manifest;
 # `dagster dev` does this automatically, `job execute` does not):
 ( cd dbt/data_platform && uv run --project ../.. dbt parse --profiles-dir . )
-uv run dagster job execute -m data_platform.definitions -j medallion_hello_world
+uv run dagster job execute -m data_platform.definitions -j espn_ingestion
 ```
 
 > Without a collector running, you'll see harmless `Connection refused` retries from
@@ -129,8 +133,8 @@ to deploy changes. If `OTEL_EXPORTER_OTLP_ENDPOINT` is unset, compose fails fast
 the collector is a sibling container, uncomment the `otel-external` network in
 `docker-compose.prod.yml` to join its network.
 
-Traces appear under service `data-platform`. Each run produces an `ingest.raw_users`
-span (with a child `requests` HTTP span) and a `publish.gold_users_by_city` span.
+Traces appear under service `data-platform`. Each bronze ingest run produces an
+`ingest.*` span (e.g. `ingest.espn_bronze`) with child `requests` HTTP spans.
 
 ## Layout
 
@@ -148,17 +152,19 @@ span (with a child `requests` HTTP span) and a `publish.gold_users_by_city` span
 ├── src/data_platform/
 │   ├── config.py               # pydantic-settings (env-driven)
 │   ├── otel.py                 # tracer provider + OTLP exporter + requests instrumentation
-│   ├── definitions.py          # Dagster code location: assets, job, schedule, dbt resource
+│   ├── definitions.py          # Dagster code location: assets, jobs, schedules, dbt resource
 │   ├── models/
 │   │   ├── schemas.py          # Pydantic record models
-│   │   └── validation.py       # Pandera DataFrame schema
+│   │   └── validation.py       # Pandera DataFrame schemas
 │   └── assets/
-│       ├── bronze.py           # raw_users ingest asset
-│       ├── dbt.py              # @dbt_assets (silver + gold) + source->bronze lineage
-│       └── gold.py             # publish_gold_parquet asset
-├── dbt/data_platform/          # dbt project (profiles target DuckDB)
-│   ├── models/silver/          # stg_users + sources + tests
-│   └── models/gold/            # dim_users_by_city (table) + users_by_city_export (Parquet) + tests
+│       ├── ingestion/          # bronze: espn, matchbook_events, matchbook_odds, football_{main,extra}
+│       ├── intermediate/       # matchbook_conform, matchbook_t60 (write silver Parquet for dbt)
+│       └── dbt.py              # @dbt_assets (staging/intermediate/marts) + source->bronze lineage
+├── dbt/data_platform/          # dbt project (profiles target DuckLake)
+│   └── models/
+│       ├── staging/            # stg_espn_events, stg_matchbook_odds + sources + tests
+│       ├── intermediate/       # canonical int_{league,season,team,match} + provider *_link tables
+│       └── marts/              # fct_completed_matches + *_export (external Parquet) + tests
 ├── notebooks/explore.ipynb     # DuckDB exploration of all layers
-└── data/{bronze,silver,gold}/  # Parquet lake + warehouse.duckdb
+└── data/{bronze,silver,gold}/  # Parquet lake + DuckLake catalog
 ```

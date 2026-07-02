@@ -19,8 +19,6 @@ from .assets.ingestion.matchbook_events import matchbook_events_bronze
 from .assets.ingestion.matchbook_odds import matchbook_odds_bronze, odds_stream_fresh
 from .assets.intermediate.matchbook_conform import matchbook_conform
 from .assets.intermediate.matchbook_t60 import matchbook_t60_enrichment
-from .assets.migration.espn import espn_postgres_migration
-from .assets.migration.matchbook import matchbook_postgres_migration
 from .espn.http_client import ThrottledHttpClient as EspnThrottledHttpClient
 from .football.http_client import ThrottledHttpClient
 from .otel import configure_telemetry
@@ -57,10 +55,6 @@ matchbook_events_assets = AssetSelection.assets(matchbook_events_bronze)
 matchbook_odds_observe_assets = AssetSelection.assets(
     matchbook_odds_bronze.key
 ) | AssetSelection.checks_for_assets(matchbook_odds_bronze.key)
-
-# One-off migration assets.
-matchbook_migration_assets = AssetSelection.assets(matchbook_postgres_migration)
-espn_migration_assets = AssetSelection.assets(espn_postgres_migration)
 
 # Matchbook conform layer: conform + T-60 enrichment + the dbt models they feed.
 # Heavy standalone pipeline that depends on a full Matchbook events bronze lake.
@@ -151,8 +145,6 @@ defs = Definitions(
         espn_bronze,
         matchbook_events_bronze,
         matchbook_odds_bronze,
-        matchbook_postgres_migration,
-        espn_postgres_migration,
         matchbook_conform,
         matchbook_t60_enrichment,
     ],

@@ -12,17 +12,17 @@ uv sync
 PYTHONPATH=src DATA_DIR="$PWD/data" DUCKDB_PATH="$PWD/data/warehouse.duckdb" \
   DAGSTER_HOME="$PWD/.dagster" uv run dagster dev -m data_platform.definitions
 
-# Run the whole medallion flow headless. `job execute` does NOT build the dbt
+# Run a source flow headless. `job execute` does NOT build the dbt
 # manifest, so parse first or the import fails at @dbt_assets decoration time:
 ( cd dbt/data_platform && uv run --project ../.. dbt parse --profiles-dir . )
 PYTHONPATH=src DATA_DIR="$PWD/data" DUCKDB_PATH="$PWD/data/warehouse.duckdb" \
   DAGSTER_HOME="$PWD/.dagster" \
-  uv run dagster job execute -m data_platform.definitions -j medallion_hello_world
+  uv run dagster job execute -m data_platform.definitions -j espn_ingestion
 
 # dbt directly (run a single model / test from the dbt project dir)
 cd dbt/data_platform
-uv run --project ../.. dbt build --select stg_users          # one model + its tests
-uv run --project ../.. dbt test  --select dim_users_by_city  # tests only
+uv run --project ../.. dbt build --select stg_espn_events     # one model + its tests
+uv run --project ../.. dbt test  --select int_match           # tests only
 
 # Run dbt WITHOUT the live catalog, via a scratch file-backed DuckLake. When the
 # Docker `ducklake-catalog` (Postgres) is unreachable, point --profiles-dir at a
@@ -72,22 +72,22 @@ Medallion pipeline orchestrated by Dagster, transformed/tested by dbt on DuckDB,
 every layer persisted as Parquet, traced via OpenTelemetry → SigNoz.
 
 ```
-raw_users ──▶ silver/stg_users ──▶ gold/dim_users_by_city ──▶ gold/users_by_city_export ──▶ publish_gold_parquet
-(Dagster:     (dbt view)            (dbt table)                (dbt external → Parquet)        (Dagster: reads Parquet)
- requests+Pydantic+Pandera                                                                      emits OTel span)
- → bronze Parquet)
+sources ──▶ bronze Parquet ──▶ silver/staging (dbt) ──▶ intermediate/canonical (dbt + Python) ──▶ marts/gold (dbt)
+(ESPN,       assets/ingestion/*  stg_espn_events,         int_{league,season,team,match},          fct_completed_matches
+ Matchbook,  requests+Pydantic   stg_matchbook_odds       int_*_link, matchbook_conform + t60      + *_export (external Parquet)
+ football)   +Pandera                                     [dbt tests + relationships]              [dbt tests]
 ```
 
-- **Edge of the system is `assets/bronze.py`** — the only asset that touches the
+- **Edge of the system is `assets/ingestion/*`** — the only assets that touch the
   network. Validation is layered: Pydantic (`models/schemas.py`) per record →
   Pandera (`models/validation.py`) on the frame → dbt tests in the warehouse.
 - **dbt lineage surfaces as Dagster assets** via `@dbt_assets` in `assets/dbt.py`.
-  The dbt project lives under `dbt/data_platform/`; silver reads the bronze Parquet
-  as an external source, gold aggregates silver.
+  The dbt project lives under `dbt/data_platform/`; staging reads the bronze Parquet
+  as an external source, intermediate/marts build the canonical model on top.
 
 ### Non-obvious constraints (these caused real bugs — preserve them)
 
-- **DuckDB single-writer constraint applies to `warehouse.duckdb` only (applies to warehouse.duckdb only; DuckLake-managed tables support concurrent access).** Do NOT open `warehouse.duckdb` read-write from a second process/Dagster step — a separate process cannot see dbt's un-checkpointed WAL writes and gets phantom "schema does not exist" catalog errors. After Spec 003, `profiles.yml` `path:` points at the DuckLake catalog. Silver and gold dbt models now write to DuckLake (the PostgreSQL-backed catalog), which supports concurrent readers. The gold external Parquet export (`users_by_city_export.sql`) still writes a file — have Python read the resulting **file**, not any catalog table.
+- **DuckDB single-writer constraint applies to `warehouse.duckdb` only (applies to warehouse.duckdb only; DuckLake-managed tables support concurrent access).** Do NOT open `warehouse.duckdb` read-write from a second process/Dagster step — a separate process cannot see dbt's un-checkpointed WAL writes and gets phantom "schema does not exist" catalog errors. After Spec 003, `profiles.yml` `path:` points at the DuckLake catalog. Silver and gold dbt models now write to DuckLake (the PostgreSQL-backed catalog), which supports concurrent readers. The gold external Parquet exports (`marts/exports/*_export.sql`) still write files — have Python read the resulting **file**, not any catalog table.
 - **Python assets must NOT open a DuckLake connection — even read-only.** ARCHITECTURE.md rule 3 ("dbt owns the DuckLake catalog; Python reads Parquet files, not catalog tables") applies to ALL Python connections to DuckLake, not just read-write ones. When a conform or enrichment asset needs canonical data (e.g. the `team` or `match` tables), add a dbt external Parquet export for those tables and have Python read the resulting files. A read-only `duckdb.connect(...)` on the DuckLake catalog from a Python Dagster asset violates the architectural boundary.
 - **`DATA_PATH` in the DuckLake `attach` stanza must match across all consumers.** The `profiles.yml` `attach:` entry specifies a `DATA_PATH`. Always ensure consistent data path specifications so catalog attachments succeed cleanly.
 - **Remove the `attach:` stanza when switching `profiles.yml` `path:` to DuckLake.** During incremental adoption (Spec 002), DuckLake was introduced via `attach:` (alias `lake`) while `path:` still pointed at `warehouse.duckdb`. After switching `path:` to the DuckLake catalog URI, the `attach:` entry must be deleted — keeping both causes a double-attach of the same catalog, which raises a cryptic error on startup.
@@ -107,11 +107,12 @@ raw_users ──▶ silver/stg_users ──▶ gold/dim_users_by_city ──▶ 
   files; Matchbook is live, football-data is a scaffold. Don't create/alter these
   with a raw DuckDB connection — that reintroduces the second-writer problem above.
   (`ERD.md` is the Postgres-flavoured source spec; this repo realises it in DuckLake.)
-- **`dbt build` is NOT green from a clean checkout.** `stg_users` (and the gold
-  models) read `data/bronze/users.parquet`, which the Dagster `bronze` asset must
-  materialize first; without it dbt fails with `IO Error: No files found …
-  users.parquet`. This is environmental (no data yet), not a regression — run the
-  ingest before `dbt build`, or expect that one model to error while the rest pass.
+- **`dbt build` is NOT green from a clean checkout.** The staging models
+  (`stg_espn_events`, `stg_matchbook_odds`) read bronze Parquet under `data/bronze/**`,
+  which the Dagster ingestion assets must materialize first; without it dbt fails with
+  `IO Error: No files found …`. This is environmental (no data yet), not a regression —
+  run the relevant bronze ingest before `dbt build`, or expect those models to error
+  while the rest pass.
 - **dbt model Dagster asset keys are prefixed by their *schema* folder only — NOT
   every subfolder.** A model under `models/intermediate/int_match.sql` gets
   `AssetKey(["intermediate", "int_match"])`; a deeper subfolder (were one to exist)
@@ -181,9 +182,10 @@ raw_users ──▶ silver/stg_users ──▶ gold/dim_users_by_city ──▶ 
   its `<family|division>` key. **Seed-only, no auto-learn** (no write-back of provider spellings).
   Registered in `dbt/data_platform/seeds/_seeds.yml` (the first `_seeds.yml` in the repo).
 - **The bronze→silver edge is wired by `BronzeAwareTranslator`** in `assets/dbt.py`,
-  which maps the dbt source `users` to `AssetKey(["raw_users"])`. Renaming the
-  bronze asset or the dbt source breaks the lineage link. **Every dbt bronze source
-  a model reads must have an entry in `_SOURCE_ASSET_KEYS` pointing at its producer,
+  which maps each dbt bronze source (e.g. `espn_events` → `AssetKey(["espn_bronze"])`,
+  `matchbook_events` → `AssetKey(["matchbook_events_bronze"])`) to its upstream Dagster
+  ingest asset. Renaming a bronze asset or dbt source breaks the lineage link. **Every
+  dbt bronze source a model reads must have an entry in `_SOURCE_ASSET_KEYS` pointing at its producer,
   or the asset-graph edge silently doesn't form** (the source becomes a dangling
   external key). This is easy to miss — `dagster definitions validate` stays green
   either way; verify with `defs.resolve_asset_graph()` and check the staging model's
@@ -263,12 +265,14 @@ raw_users ──▶ silver/stg_users ──▶ gold/dim_users_by_city ──▶ 
   way. (Validation: `dagster definitions validate` only loads the location in one
   process — it does NOT catch this; you must actually launch a queued run, or at
   least `dagster definitions validate -w workspace.yaml`.)
-- **`AssetSelection.all()` sweeps in every registered asset**, so `medallion_job`
-  explicitly subtracts the football assets (`AssetSelection.all() -
-  football_assets`). Without that, the hello-world demo job *and the daily
-  schedule* would trigger the ~705-file football backfill. Run football only via
-  the dedicated `football_backfill` job. When adding a new heavy/standalone source,
-  give it its own job and exclude it from `all()`-based jobs.
+- **Every job uses an explicit `AssetSelection.assets(...)` selection — no
+  `AssetSelection.all()`-based job exists.** Each source is scoped to its own job
+  (`espn_ingestion`, `matchbook_events_ingestion`, `matchbook_conform_job`,
+  `matchbook_odds_observe`, `football_backfill`), so a heavy source like the ~705-file
+  football backfill only runs via its dedicated `football_backfill` job. When adding a
+  new source, give it its own explicit-selection job rather than reintroducing an
+  `all()`-based sweep (which would pull every registered asset — including the heavy
+  backfills — into one run).
 
 ### Configuration & telemetry
 
@@ -333,7 +337,6 @@ run via pre-commit) — don't hand-format; let `ruff format` decide. Lint set is
 - **Config property name collision for new providers:** When adding a new bronze source for a provider that already has config fields (e.g. Matchbook has `matchbook_bronze_dir` for the Redis odds ingestor), check `config.py` for existing property names before adding a new one. Silently overwriting a live property breaks the existing ingestor.
 - **Config fields must precede the asset wrapper in sequencing:** The asset module reads `settings.<field>` at the top of its body — if the config field doesn't exist yet, importing the asset raises `AttributeError` at test time. Always add new `Settings` fields (and the provider's `base_url` config field) before writing the Dagster asset wrapper.
 - **Per-sport ingest isolation: ingest unit returns, outer loop re-raises.** The unit-level ingest function (e.g. `ingest_sport`) must return a failure count rather than raising on per-record Pydantic failures — raising aborts remaining units. The outer `run_*_ingest` function accumulates failures and re-raises at the end so all units are attempted and valid Parquet files persist. Pattern: `matchbook/ingest.py`, mirrors `espn/ingest.py`.
-- **Two-part AssetSelection exclusion test.** When testing that an asset is excluded from `medallion_hello_world`, assert (1) the asset IS in `AssetSelection.all()` resolved keys (i.e. it is registered) AND (2) it is NOT in the job's asset keys. A one-part "not in job" test passes vacuously before the asset is registered, hiding a missing exclusion subtraction.
 - **Run ruff on the files you changed, not the whole tree.** `ruff format src` (or a
   task that lints `src` wholesale) reformats unrelated, pre-existing files and drags
   them into your change set. Scope ruff to your own files; the pre-commit hook
@@ -341,10 +344,10 @@ run via pre-commit) — don't hand-format; let `ruff format` decide. Lint set is
   repo gate — keep it green (it surfaces *any* file's lint debt, not just yours).
 - **`pre-commit run --all-files` currently fails on a pre-existing `SIM105` in `investigations/duckdb-data-catalogue-mcp/code/server.py:120`** (`try/except/pass` instead of `contextlib.suppress`). This is not a regression from recent spec work. When landing a feature, verify your changes don't introduce *new* SIM findings; if all-files still fails after your changes are clean, the break is pre-existing debt and can be fixed in a follow-up lint sprint.
 - **Enrichment Parquet files may write join-key columns as INT32/INT64 even when the canonical target is VARCHAR.** The T-60 enrichment asset writes `favourite_team_id` as INT32 (pandas default for numeric-looking hex strings stored as integers), but `team.team_id` is VARCHAR in DuckLake. Any gold LEFT JOIN on an enrichment-sourced ID column must use `cast(... as varchar)` explicitly — the join silently errors without it. Discovered and fixed in spec 008 commit `16802b6`.
-- **Gold layer convention: two-file pattern (table + export).** Each gold analytics model follows the `dim_users_by_city.sql` + `users_by_city_export.sql` template: one SQL file for the logic (inherits `+materialized: table` from `dbt_project.yml`), one `<model>_export.sql` wrapping it with `materialized='external'` to write `$DATA_DIR/gold/<model>.parquet`. Notebooks read the exported Parquet file; they never connect to the DuckLake catalog.
+- **Gold layer convention: two-file pattern (table + export).** Each gold analytics model follows the `marts/core/fct_completed_matches.sql` + `marts/exports/completed_matches_export.sql` template: one SQL file for the logic (inherits `+materialized: table` from `dbt_project.yml`), one `<model>_export.sql` wrapping it with `materialized='external'` to write `$DATA_DIR/gold/<model>.parquet`. Notebooks read the exported Parquet file; they never connect to the DuckLake catalog.
 - **Production Parquet `ingested_at` is `datetime64[ms, UTC]` not `datetime64[ns]`.** The Redis Matchbook odds ingestor writes `ingested_at` as `datetime64[ms, UTC]`. Converting this to `int64` gives epoch-milliseconds directly; dividing by 1_000_000 (as you would for `datetime64[ns]`) produces epoch-seconds and makes every tick appear outside the T-60 window. The safe normalisation is: `if tz is not None: localize(None); then astype("datetime64[ms]").astype("int64")` — this produces epoch-ms regardless of the original unit. See `filter_t60_ticks` in `t60.py`.
-- **Matchbook live-ingest events nest runners inside `markets[i]['runners']`, not at the top level.** The live `/v2/events` API response has `raw_event['markets'][i]['runners']` (each runner has `'id'` and `'name'`). Migration events (`_migration_source` in raw_event) have no runner data. When resolving runner-to-team, first try top-level `runners`, then fall back to searching `markets` for the one_x_two market. (`t60.py` run_t60_enrichment.)
-- **Migration `ingested_at` is the migration timestamp (overrides live-ingest rows in recency dedup).** The `matchbook_postgres_migration` sets each event's `ingested_at` to the time the migration ran (~June 30), which is more recent than live events ingested on June 29. This causes migration rows (with no runner data) to win the dedup over live rows (with runner data) for shared event IDs. Prefer rows with `markets` in `raw_event` before sorting by `ingested_at`. (`t60.py` events dedup logic.)
+- **Matchbook live-ingest events nest runners inside `markets[i]['runners']`, not at the top level.** The live `/v2/events` API response has `raw_event['markets'][i]['runners']` (each runner has `'id'` and `'name'`). Historic Postgres-migrated events (`_migration_source` in raw_event; the migration asset itself is retired) have no runner data. When resolving runner-to-team, first try top-level `runners`, then fall back to searching `markets` for the one_x_two market. (`t60.py` run_t60_enrichment.)
+- **Migration `ingested_at` is the migration timestamp (overrides live-ingest rows in recency dedup).** The (now-removed) Postgres migration stamped each event's `ingested_at` with the time the migration ran (~June 30), more recent than live events ingested on June 29. Any such rows still in the bronze lake (with no runner data) would win the dedup over live rows (with runner data) for shared event IDs, so `t60.py` prefers rows with `markets` in `raw_event` before sorting by `ingested_at`. This defensive dedup remains even though the migration asset is gone — remove it only if the historic migrated bronze data is also purged. (`t60.py` events dedup logic.)
 
 ## Maintaining this file
 
