@@ -13,13 +13,13 @@ from dagster_dbt import DbtCliResource
 
 from .assets.dbt import dbt_models, dbt_project
 from .assets.ingestion.espn import espn_bronze
-from .assets.ingestion.espn_postgres_migration import espn_postgres_migration
 from .assets.ingestion.football_extra import football_extra
 from .assets.ingestion.football_main import football_main
 from .assets.ingestion.matchbook_events import matchbook_events_bronze
-from .assets.ingestion.matchbook_postgres_migration import matchbook_postgres_migration
 from .assets.intermediate.matchbook_conform import matchbook_conform
 from .assets.intermediate.matchbook_t60 import matchbook_t60_enrichment
+from .assets.migration.espn import espn_postgres_migration
+from .assets.migration.matchbook import matchbook_postgres_migration
 from .espn.http_client import ThrottledHttpClient as EspnThrottledHttpClient
 from .football.http_client import ThrottledHttpClient
 from .otel import configure_telemetry

@@ -86,9 +86,9 @@ src/data_platform/              # The Dagster code location (all orchestration P
 │   └── inspector.py server.py __main__.py
 └── assets/                     # Dagster assets — thin wrappers over the engines above
     ├── dbt.py                  #   dbt_models + BronzeAwareTranslator (staging/intermediate/marts)
-    ├── ingestion/              #   bronze: espn, matchbook_events, football_{main,extra},
-    │                           #           espn_postgres_migration, matchbook_postgres_migration
-    └── intermediate/           #   matchbook_conform, matchbook_t60 (write silver Parquet for dbt)
+    ├── ingestion/              #   bronze: espn, matchbook_events, football_{main,extra}
+    ├── intermediate/           #   matchbook_conform, matchbook_t60 (write silver Parquet for dbt)
+    └── migration/              #   one-off backfill wrappers: espn, matchbook (over migrate/ engines)
 
 dbt/data_platform/              # The dbt project (all SQL transformation + warehouse tests)
 ├── dbt_project.yml profiles.yml       # DuckLake target; nodes routed with +database: lake
