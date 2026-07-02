@@ -71,12 +71,17 @@ def _bootstrap_additions(additions_dir, t60_dir) -> None:
     key=AssetKey(["matchbook_conform"]),
     group_name="intermediate",
     compute_kind="python",
+    # Deliberately NOT declaring a Dagster dep on the canonical_*_export marts here,
+    # even though this asset reads their Parquet output as input (settings.
+    # matchbook_conform_canonical_dir). Those exports ref() int_league/int_season/
+    # int_team/int_match, which in turn now depend on THIS asset (via the
+    # matchbook_canonical_*_additions source mapping) — declaring the reverse edge
+    # too would close a real cycle in the asset graph. This asset reads whatever the
+    # exports currently contain on disk (possibly refreshed by an espn_ingestion run
+    # a few minutes earlier, not necessarily this exact run); the re-mint-if-still-
+    # missing path is idempotent (deterministic ids), so that staleness is harmless.
     deps=[
         AssetKey(["matchbook_events_bronze"]),
-        AssetKey(["marts", "canonical_match_export"]),
-        AssetKey(["marts", "canonical_team_export"]),
-        AssetKey(["marts", "canonical_league_export"]),
-        AssetKey(["marts", "canonical_season_export"]),
     ],
     description=(
         "Matchbook conform: fuzzy-matches football events to canonical matches, "

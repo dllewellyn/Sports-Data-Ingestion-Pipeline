@@ -30,6 +30,10 @@ ESPN_KEYS = {
     "intermediate/int_match",
     "intermediate/int_espn_match_link",
     "staging/team_aliases",
+    "marts/canonical_match_export",
+    "marts/canonical_team_export",
+    "marts/canonical_league_export",
+    "marts/canonical_season_export",
 }
 
 
@@ -74,51 +78,49 @@ def test_espn_schedule_is_six_hourly_targeting_the_job() -> None:
     assert schedule.job.name == "espn_ingestion"
 
 
-# ── Matchbook events wiring tests (Spec 004 S5 — AC9, AC10) ───────────────────
+# ── Matchbook end-to-end wiring tests (definitions.py merge: ingest + conform +
+# T-60 + canonical/link rebuild all in one job, replacing the old separately-
+# scheduled matchbook_events_ingestion / matchbook_conform_job pair) ──────────
+
+MATCHBOOK_KEYS = {
+    "matchbook_events_bronze",
+    "matchbook_conform",
+    "matchbook_t60_enrichment",
+    "intermediate/int_league",
+    "intermediate/int_season",
+    "intermediate/int_team",
+    "intermediate/int_match",
+    "intermediate/int_matchbook_event_link",
+    "intermediate/int_matchbook_team_link",
+    "intermediate/int_matchbook_league_link",
+}
 
 
-def test_matchbook_events_job_registered() -> None:
-    """matchbook_events_ingestion job is registered (AC10)."""
+def test_matchbook_job_selects_exactly_the_matchbook_assets() -> None:
+    """matchbook_ingestion job registered with the full end-to-end selection."""
     defs = _load_defs()
 
     job_names = {job.name for job in defs.jobs}
-    assert "matchbook_events_ingestion" in job_names
-
-    job_keys = _job_keys(defs, "matchbook_events_ingestion")
-    assert job_keys == {"matchbook_events_bronze"}
+    assert "matchbook_ingestion" in job_names
+    assert _job_keys(defs, "matchbook_ingestion") == MATCHBOOK_KEYS
 
 
-def test_matchbook_events_schedule_six_hourly() -> None:
-    """matchbook_events_schedule cron is '0 */6 * * *' targeting the job (AC10)."""
+def test_matchbook_schedule_is_six_hourly_offset_from_espn() -> None:
+    """matchbook_every_6h targets matchbook_ingestion, offset from espn_every_6h."""
     defs = _load_defs()
 
     schedules = {s.name: s for s in defs.schedules}
-    assert "matchbook_events_schedule" in schedules
-    schedule = schedules["matchbook_events_schedule"]
-    assert schedule.cron_schedule == "0 */6 * * *"
-    assert schedule.job.name == "matchbook_events_ingestion"
+    assert "matchbook_every_6h" in schedules
+    schedule = schedules["matchbook_every_6h"]
+    assert schedule.cron_schedule == "15 */6 * * *"
+    assert schedule.job.name == "matchbook_ingestion"
 
-
-# ── Matchbook conform wiring tests (Spec 006 S12 — AC13) ─────────────────────
-
-
-def test_matchbook_conform_job_registered() -> None:
-    """matchbook_conform_job is registered in defs (AC13)."""
-    defs = _load_defs()
-
+    # No longer two separate jobs/schedules for events vs. conform.
     job_names = {job.name for job in defs.jobs}
-    assert "matchbook_conform_job" in job_names
-
-
-def test_matchbook_conform_schedule_registered() -> None:
-    """matchbook_conform_schedule is registered with correct cron (AC13)."""
-    defs = _load_defs()
-
-    schedules = {s.name: s for s in defs.schedules}
-    assert "matchbook_conform_schedule" in schedules
-    schedule = schedules["matchbook_conform_schedule"]
-    assert schedule.cron_schedule == "0 1,7,13,19 * * *"
-    assert schedule.job.name == "matchbook_conform_job"
+    assert "matchbook_events_ingestion" not in job_names
+    assert "matchbook_conform_job" not in job_names
+    assert "matchbook_events_schedule" not in schedules
+    assert "matchbook_conform_schedule" not in schedules
 
 
 def test_matchbook_conform_asset_deps_include_events_bronze() -> None:

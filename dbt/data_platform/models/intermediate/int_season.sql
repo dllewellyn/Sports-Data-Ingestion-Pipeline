@@ -29,7 +29,10 @@ espn_seasons as (
 ),
 
 -- Canonical seasons minted by a provider's conform engine (action='new_canonical').
--- read_parquet REQUIRES the file to exist (it errors if absent); the conform asset
+-- Sourced via the dbt source() macro (not a raw read_parquet literal) so Dagster's
+-- BronzeAwareTranslator can draw the edge from this model to the matchbook_conform
+-- asset that produces the file — required for the model to be scheduled to rebuild
+-- after conform mints new rows. The file still errors if absent; the conform asset
 -- bootstrap-writes it empty, so an un-minted provider contributes zero rows. Every
 -- addition row carries its non-null league_id so the int_season->int_league
 -- relationships test holds (E10).
@@ -40,9 +43,7 @@ matchbook_additions as (
         cast(name as varchar)       as name,
         cast(start_date as date)    as start_date,
         cast(end_date as date)      as end_date
-    from read_parquet(
-        '{{ env_var("DATA_DIR", "/app/data") }}/silver/matchbook_canonical_season_additions.parquet'
-    )
+    from {{ source('bronze', 'matchbook_canonical_season_additions') }}
 ),
 
 football_data_additions as (

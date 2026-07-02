@@ -35,6 +35,23 @@ football_assets = AssetSelection.assets(football_main, football_extra)
 # AssetKeys are `["staging","<model>"]` for staging and `["intermediate","<model>"]` for
 # intermediate (verified from the manifest); the `team_aliases` seed surfaces as
 # `["staging","team_aliases"]`, so it rides with this source.
+#
+# int_league/int_season/int_team/int_match are SHARED canonical models, not ESPN's —
+# they union every provider's contributions (Spec 012). They're included here because
+# ESPN's own bronze scoreboards feed them directly via ref(); they're ALSO included in
+# `matchbook_assets` below, since Matchbook mints into them too. Both jobs rebuild the
+# same underlying dbt models; that's intentional, not duplication to clean up.
+#
+# The four canonical_*_export marts also rebuild here, not in matchbook_assets:
+# matchbook_conform reads those exports as INPUT (deps=[...] below), and the exports
+# themselves ref() the canonical models — including them in the SAME job as
+# matchbook_conform would close a cycle (export -> int_match -> matchbook_conform ->
+# export) once int_match also depends on matchbook_conform. Rebuilding them here
+# instead means matchbook_job always reads exports from the most recent espn_job run
+# (at most ~15 minutes stale, given the schedule offset below) rather than needing a
+# same-run refresh; matchbook_conform's re-mint-if-still-missing behaviour is already
+# idempotent (same deterministic id), so a few extra minutes of export staleness is
+# harmless.
 espn_assets = AssetSelection.assets(
     espn_bronze,
     AssetKey(["staging", "stg_espn_events"]),
@@ -44,10 +61,11 @@ espn_assets = AssetSelection.assets(
     AssetKey(["intermediate", "int_match"]),
     AssetKey(["intermediate", "int_espn_match_link"]),
     AssetKey(["staging", "team_aliases"]),
+    AssetKey(["marts", "canonical_match_export"]),
+    AssetKey(["marts", "canonical_team_export"]),
+    AssetKey(["marts", "canonical_league_export"]),
+    AssetKey(["marts", "canonical_season_export"]),
 )
-
-# Matchbook events bronze ingest: standalone 6-hourly source.
-matchbook_events_assets = AssetSelection.assets(matchbook_events_bronze)
 
 # Matchbook odds bronze: an observable source asset over the out-of-band
 # ingestor daemon's Parquet output. The observe job records freshness (age of
@@ -56,16 +74,26 @@ matchbook_odds_observe_assets = AssetSelection.assets(
     matchbook_odds_bronze.key
 ) | AssetSelection.checks_for_assets(matchbook_odds_bronze.key)
 
-# Matchbook conform layer: conform + T-60 enrichment + the dbt models they feed.
-# Heavy standalone pipeline that depends on a full Matchbook events bronze lake.
-matchbook_conform_assets = AssetSelection.assets(
+# Matchbook end-to-end flow: bronze events -> conform/mint -> T-60 enrichment -> the
+# canonical + link dbt models they feed, all in one job (mirrors espn_assets' shape).
+# The canonical models (int_league/season/team/match) now depend on matchbook_conform
+# via proper dbt source() edges (see _sources.yml + BronzeAwareTranslator), so
+# dagster-dbt automatically sequences them to rebuild AFTER conform + T-60 within this
+# single job — no separate, later-scheduled job needed to pick up freshly-minted rows.
+# The canonical_*_export marts are deliberately NOT selected here (they rebuild in
+# espn_assets instead) — see the comment above espn_assets for why including them
+# here would close a dependency cycle back through matchbook_conform.
+matchbook_assets = AssetSelection.assets(
+    matchbook_events_bronze,
     matchbook_conform,
     matchbook_t60_enrichment,
+    AssetKey(["intermediate", "int_league"]),
+    AssetKey(["intermediate", "int_season"]),
+    AssetKey(["intermediate", "int_team"]),
+    AssetKey(["intermediate", "int_match"]),
     AssetKey(["intermediate", "int_matchbook_event_link"]),
-    AssetKey(["marts", "canonical_match_export"]),
-    AssetKey(["marts", "canonical_team_export"]),
-    AssetKey(["marts", "canonical_league_export"]),
-    AssetKey(["marts", "canonical_season_export"]),
+    AssetKey(["intermediate", "int_matchbook_team_link"]),
+    AssetKey(["intermediate", "int_matchbook_league_link"]),
 )
 
 
@@ -93,19 +121,6 @@ espn_schedule = ScheduleDefinition(
     cron_schedule="0 */6 * * *",
 )
 
-# Matchbook events: dedicated job + 6-hourly schedule.
-matchbook_events_job = define_asset_job(
-    name="matchbook_events_ingestion",
-    selection=matchbook_events_assets,
-    description="Matchbook open events (football + rugby union) → bronze Parquet every 6 hours.",
-)
-
-matchbook_events_schedule = ScheduleDefinition(
-    name="matchbook_events_schedule",
-    job=matchbook_events_job,
-    cron_schedule="0 */6 * * *",
-)
-
 # Matchbook odds freshness: observe the daemon's bronze output + run the freshness
 # check every 15 minutes. Cheap (stats the newest Parquet file); no materialization.
 matchbook_odds_observe_job = define_asset_job(
@@ -120,21 +135,26 @@ matchbook_odds_observe_schedule = ScheduleDefinition(
     cron_schedule="*/15 * * * *",
 )
 
-# Matchbook conform job: runs 1 hour after matchbook_events_ingestion so the bronze lake
-# is fresh before conform runs.
-matchbook_conform_job = define_asset_job(
-    name="matchbook_conform_job",
-    selection=matchbook_conform_assets,
+# Matchbook: one end-to-end job, like espn_job — bronze ingest, conform/mint, T-60
+# enrichment, and the dbt rebuild of the canonical + link models all run together, so a
+# freshly-minted team/league/season/match is visible immediately, not after a separate,
+# later-scheduled job.
+matchbook_job = define_asset_job(
+    name="matchbook_ingestion",
+    selection=matchbook_assets,
     description=(
-        "Matchbook conform layer: fuzzy-match events to canonical matches, "
-        "T-60 enrichment, and dbt rebuild of int_matchbook_event_link + int_match."
+        "Matchbook end-to-end: bronze events -> conform/mint -> T-60 enrichment -> "
+        "dbt rebuild of int_league/int_season/int_team/int_match + link models."
     ),
 )
 
-matchbook_conform_schedule = ScheduleDefinition(
-    name="matchbook_conform_schedule",
-    job=matchbook_conform_job,
-    cron_schedule="0 1,7,13,19 * * *",  # 1 hour after the 6-hourly events ingestion
+matchbook_schedule = ScheduleDefinition(
+    name="matchbook_every_6h",
+    job=matchbook_job,
+    # Offset 15 minutes from espn_schedule (also every 6h, on the hour) so the two
+    # jobs don't both fire at the same instant and write to the same DuckLake
+    # canonical tables concurrently.
+    cron_schedule="15 */6 * * *",
 )
 
 defs = Definitions(
@@ -152,15 +172,13 @@ defs = Definitions(
     jobs=[
         football_backfill_job,
         espn_job,
-        matchbook_events_job,
+        matchbook_job,
         matchbook_odds_observe_job,
-        matchbook_conform_job,
     ],
     schedules=[
         espn_schedule,
-        matchbook_events_schedule,
+        matchbook_schedule,
         matchbook_odds_observe_schedule,
-        matchbook_conform_schedule,
     ],
     resources={
         "dbt": DbtCliResource(project_dir=dbt_project),

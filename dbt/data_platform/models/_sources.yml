@@ -79,6 +79,21 @@ sources:
         meta:
           external_location: "{{ env_var('DATA_DIR', '/app/data') }}/silver/matchbook_canonical_match_additions.parquet"
 
+      - name: matchbook_canonical_team_additions
+        description: "New canonical team rows minted by the conform asset when a parsed team name doesn't resolve against the team_aliases seed or an existing canonical team."
+        meta:
+          external_location: "{{ env_var('DATA_DIR', '/app/data') }}/silver/matchbook_canonical_team_additions.parquet"
+
+      - name: matchbook_canonical_league_additions
+        description: "New canonical league rows minted by the conform asset when a Matchbook sport/category doesn't resolve via the league_aliases seed."
+        meta:
+          external_location: "{{ env_var('DATA_DIR', '/app/data') }}/silver/matchbook_canonical_league_additions.parquet"
+
+      - name: matchbook_canonical_season_additions
+        description: "New canonical season rows minted by the conform asset alongside a minted league/match."
+        meta:
+          external_location: "{{ env_var('DATA_DIR', '/app/data') }}/silver/matchbook_canonical_season_additions.parquet"
+
       - name: matchbook_t60_enrichment
         description: "T-60 minute favourite enrichment rows. Written by the matchbook_t60_enrichment Dagster asset."
         meta:

@@ -7,7 +7,7 @@ End-to-end description of how data enters, gets linked, and is enriched across t
 | Source | What it provides | Schedule |
 |---|---|---|
 | **ESPN API** | Match fixtures, final scores, team/league metadata | Every 6 hours (`espn_every_6h`) |
-| **Matchbook events API** | Open betting events, kickoff times, total liquidity | Every 6 hours (`matchbook_events_schedule`) |
+| **Matchbook events API** | Open betting events, kickoff times, total liquidity | Every 6 hours (`matchbook_every_6h`, offset 15 min from ESPN) |
 | **Matchbook odds** (Redis ingestor) | Pre/in-play prices per market and runner, volumes, WoM | Continuously (separate service) |
 
 ---
@@ -22,7 +22,7 @@ Raw data written as Parquet, one file per logical partition. No enrichment or jo
 - Each row: `espn_event_id`, `kickoff_time`, `home_team_name`, `away_team_name`, `home_score`, `away_score`, `status_name`, `status_completed`, plus verbatim `raw_event` JSON.
 - Scores are `NULL` until ESPN marks `status_completed = true` — subsequent ingest runs overwrite the file with the final score populated.
 
-### Matchbook events (`matchbook_events_ingestion` job → `matchbook_events_bronze` asset)
+### Matchbook events (`matchbook_ingestion` job → `matchbook_events_bronze` asset)
 - Fetches open events from the Matchbook API, filtered to football and rugby union.
 - Writes `data/bronze/matchbook_events/<sport>/<date>/<batch_ts>.parquet`
 - Each row: `event_id`, `event_name`, `sport_id`, `status`, `start_utc`, `volume`, `raw_event` JSON.
@@ -49,10 +49,17 @@ conforms in **SQL** and is the **union base**; every other provider conforms in
 `ESPN base CTE UNION ALL read_parquet(<provider>_canonical_<entity>_additions.parquet)`,
 keep-one on the id.
 
-### Step 1 — Canonical dimensions: ESPN base (dbt, part of `espn_ingestion`)
+### Step 1 — Canonical dimensions: ESPN base (dbt, part of `espn_ingestion` AND `matchbook_ingestion`)
 
 ESPN bronze is the **union base for match identity**. These dbt models
-(`models/intermediate/int_*`) run after each ESPN ingest:
+(`models/intermediate/int_*`) rebuild after each ESPN ingest, and *also* after each
+Matchbook conform step (below) within the same `matchbook_ingestion` run — they union
+every provider's contributions and are not "owned" by either job. Each provider's
+`<provider>_canonical_<entity>_additions.parquet` is read via a dbt `source()` (not a
+raw `read_parquet()` literal), registered in `_sources.yml` and mapped in
+`BronzeAwareTranslator` to the asset that produces it; that's what makes Dagster
+schedule the canonical rebuild immediately after that provider mints something, instead
+of only picking it up whenever `espn_ingestion` next happens to run:
 
 | Model | What it builds |
 |---|---|
@@ -79,7 +86,10 @@ Each non-ESPN provider has a module under `src/data_platform/conform/`
 identity authority. A provider's conform asset reads bronze events + the canonical
 Parquet exports, fuzzy-matches on team-name similarity + kickoff proximity, applies
 human overrides, and **mints canonical rows** for fixtures ESPN doesn't have. It
-writes **four** additions files plus links/exceptions:
+writes **four** additions files plus links/exceptions. For Matchbook this runs inside
+the single `matchbook_ingestion` job (bronze -> conform -> the Step 1 canonical rebuild
+above -> T-60), so a freshly-minted team/league/season/match is visible by the end of
+that same run — not a separately-scheduled job hours later:
 - `data/silver/<provider>_canonical_{match,team,league,season}_additions.parquet` — one per canonical entity the minted match's `season → league → team` chain references; unioned back into `int_{match,team,league,season}` via `read_parquet` + `UNION ALL`. These are **bootstrap-written empty** (correct columns, zero rows) by `conform.bootstrap_additions_files` so the `int_*` `read_parquet` unions stay green before a provider mints anything (`read_parquet` errors on a missing file — it does not silently return zero rows, so the empty file must exist).
 - `data/silver/<provider>_resolved_links.parquet` — linked events with `<provider>_event_id → match_id`, confidence, review status → `int_<provider>_*_link` (dbt).
 - `data/exceptions/<provider>_unresolved.parquet` — events that couldn't be matched.

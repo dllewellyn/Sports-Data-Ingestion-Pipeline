@@ -70,7 +70,10 @@ espn_matches as (
 ),
 
 -- New canonical rows minted by the Matchbook conform engine (action='new_canonical').
--- read_parquet REQUIRES the file to exist (it errors if absent); the conform asset
+-- Sourced via the dbt source() macro (not a raw read_parquet literal) so Dagster's
+-- BronzeAwareTranslator can draw the edge from this model to the matchbook_conform
+-- asset that produces the file — required for the model to be scheduled to rebuild
+-- after conform mints new rows. The file still errors if absent; the conform asset
 -- bootstrap-writes it empty, so an un-minted Matchbook provider contributes zero rows.
 canonical_additions as (
     select
@@ -82,9 +85,7 @@ canonical_additions as (
         cast(null as varchar) as ht_score,
         cast(null as varchar) as ft_score,
         false                 as status_completed
-    from read_parquet(
-        '{{ env_var("DATA_DIR", "/app/data") }}/silver/matchbook_canonical_match_additions.parquet'
-    )
+    from {{ source('bronze', 'matchbook_canonical_match_additions') }}
 ),
 
 -- New canonical rows minted by the football-data conform engine (action='new_canonical').
@@ -114,8 +115,18 @@ combined as (
 ),
 
 -- T-60 enrichment: favourite team from pre-match Matchbook odds.
--- read_parquet REQUIRES the file to exist (it errors if absent); the T-60 asset
--- bootstrap-writes it empty, so a match with no odds keeps favourite_team_id NULL.
+-- Deliberately a raw read_parquet literal, NOT the dbt source() macro: int_match already
+-- depends on matchbook_conform (via the canonical_additions source above); adding a
+-- SECOND cross-op dependency on matchbook_t60_enrichment (which itself depends on
+-- int_matchbook_event_link, part of this same dbt multi-asset) is a 3-tier ordering
+-- requirement dagster-dbt's automatic step-subsetting cannot resolve (it splits a
+-- @dbt_assets op into at most 2 steps around ONE external dependency, not a chain of
+-- two) — attempting it raises a circular-dependency error at Definitions build time.
+-- Favourite-team enrichment therefore lands on whichever run rebuilds int_match AFTER
+-- T-60 has already written this file (same behaviour as before this change; T-60
+-- freshness was never gated on a same-run edge). The file still errors if absent; the
+-- T-60 asset bootstrap-writes it empty, so a match with no odds keeps favourite_team_id
+-- NULL.
 t60_enrichment as (
     select match_id, favourite_team_id
     from read_parquet(

@@ -269,12 +269,53 @@ sources ──▶ bronze Parquet ──▶ silver/staging (dbt) ──▶ interm
   least `dagster definitions validate -w workspace.yaml`.)
 - **Every job uses an explicit `AssetSelection.assets(...)` selection — no
   `AssetSelection.all()`-based job exists.** Each source is scoped to its own job
-  (`espn_ingestion`, `matchbook_events_ingestion`, `matchbook_conform_job`,
-  `matchbook_odds_observe`, `football_backfill`), so a heavy source like the ~705-file
-  football backfill only runs via its dedicated `football_backfill` job. When adding a
-  new source, give it its own explicit-selection job rather than reintroducing an
-  `all()`-based sweep (which would pull every registered asset — including the heavy
-  backfills — into one run).
+  (`espn_ingestion`, `matchbook_ingestion`, `matchbook_odds_observe`,
+  `football_backfill`), so a heavy source like the ~705-file football backfill only
+  runs via its dedicated `football_backfill` job. When adding a new source, give it its
+  own explicit-selection job rather than reintroducing an `all()`-based sweep (which
+  would pull every registered asset — including the heavy backfills — into one run).
+- **`matchbook_ingestion` is one end-to-end job (bronze ingest -> conform/mint -> T-60
+  -> canonical + link rebuild), mirroring `espn_ingestion` — not two jobs on separate
+  schedules.** It used to be `matchbook_events_ingestion` (bronze only, every 6h) plus a
+  separately-scheduled `matchbook_conform_job` an hour later; that meant a freshly-minted
+  Matchbook team/league/season/match sat in its additions Parquet file until the next
+  unrelated `espn_ingestion` run happened to rebuild the canonical models. Merging them
+  means `int_league`/`int_season`/`int_team`/`int_match` rebuild in the SAME run that
+  minted them. `matchbook_every_6h` is offset (`15 */6 * * *` vs. `espn_every_6h`'s
+  `0 */6 * * *`) so the two jobs don't fire at the same instant and write to the same
+  DuckLake canonical tables concurrently.
+- **A provider's canonical-additions Parquet files must be dbt `source()`s, not raw
+  `read_parquet()` literals, or Dagster never schedules the canonical models to rebuild
+  after that provider mints anything.** `int_league`/`int_season`/`int_team`/`int_match`
+  read each provider's `<provider>_canonical_<entity>_additions.parquet` via
+  `{{ source('bronze', '<name>') }}`, registered in `_sources.yml` and mapped in
+  `BronzeAwareTranslator._SOURCE_ASSET_KEYS` (`assets/dbt.py`) to the asset that produces
+  it (e.g. `matchbook_conform`). A raw `read_parquet(env_var(...))` literal reads the
+  same file but is invisible to Dagster's asset graph — the model will still materialize
+  correctly if manually included in a job selection, but nothing will *know* it needs to
+  rebuild after that provider's conform step, which is exactly the bug this fixed (these
+  four models were only ever wired into `espn_assets`, i.e. "still an espn asset", despite
+  being provider-agnostic since Spec 012). Multiple sources are deliberately allowed to
+  map onto the same asset key here (`DagsterDbtTranslatorSettings(
+  enable_duplicate_source_asset_keys=True)`) since one provider's conform step
+  legitimately produces several additions files. **Caveat:** don't chain a THIRD source
+  edge through a dbt node that already has one cross-op source edge in the same
+  `@dbt_assets` selection — dagster-dbt's automatic step-subsetting only reliably
+  resolves a single external dependency tier per multi-asset op; a genuine 3-tier
+  ordering (e.g. `int_match` needing both `matchbook_conform` AND
+  `matchbook_t60_enrichment`, where t60 itself depends on another dbt node in the same
+  selection) raises a `CircularDependencyError` at `Definitions` build time even though
+  there's no real data cycle. `int_match`'s T-60 enrichment CTE is therefore still a raw
+  `read_parquet()` literal on purpose (see the comment in `int_match.sql`) — favourite-team
+  enrichment lands on whichever run rebuilds `int_match` after T-60 has written its file,
+  same as before this change. Separately: a provider's Python conform asset must NOT
+  declare a Dagster `deps=` edge back onto the dbt `canonical_*_export` marts it reads as
+  input, once the canonical models depend on that conform asset — that closes a real
+  cycle (`export -> int_match -> conform -> export`). Read the export files as plain
+  Parquet without a declared edge instead; the exports are refreshed by whichever job's
+  selection includes them without also depending on the same conform asset (currently
+  `espn_assets`), and a slightly-stale export is harmless because re-minting an
+  already-minted entity is idempotent (deterministic ids).
 
 ### Configuration & telemetry
 

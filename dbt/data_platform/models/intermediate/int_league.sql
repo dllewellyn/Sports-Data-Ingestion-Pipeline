@@ -26,16 +26,17 @@ espn_leagues as (
 ),
 
 -- Canonical leagues minted by a provider's conform engine (action='new_canonical').
--- read_parquet REQUIRES the file to exist (it errors if absent); the conform asset
+-- Sourced via the dbt source() macro (not a raw read_parquet literal) so Dagster's
+-- BronzeAwareTranslator can draw the edge from this model to the matchbook_conform
+-- asset that produces the file — required for the model to be scheduled to rebuild
+-- after conform mints new rows. The file still errors if absent; the conform asset
 -- bootstrap-writes it empty, so an un-minted provider contributes zero rows.
 matchbook_additions as (
     select
         cast(league_id as varchar)      as league_id,
         cast(name as varchar)           as name,
         cast(is_tournament as boolean)  as is_tournament
-    from read_parquet(
-        '{{ env_var("DATA_DIR", "/app/data") }}/silver/matchbook_canonical_league_additions.parquet'
-    )
+    from {{ source('bronze', 'matchbook_canonical_league_additions') }}
 ),
 
 football_data_additions as (

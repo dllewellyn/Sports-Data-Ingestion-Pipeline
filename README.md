@@ -61,8 +61,9 @@ Then, from any machine on your network:
 | OTLP collector | `<host>:4317` (gRPC) / `:4318` (HTTP) | — |
 
 **Run a source flow:** open the Dagster UI → **Jobs** and pick one — `espn_ingestion`
-(bronze scoreboards → dbt staging + canonical int_* models, every 6h), `matchbook_events_ingestion`,
-`matchbook_conform_job`, or `football_backfill` (on-demand, ~705 files). Each source has its
+(bronze scoreboards → dbt staging + canonical int_* models, every 6h), `matchbook_ingestion`
+(bronze events → conform/mint → T-60 → canonical + link models, every 6h, offset 15 min
+from ESPN), or `football_backfill` (on-demand, ~705 files). Each source has its
 own schedule (see `definitions.py`); `matchbook_odds_observe` just records odds freshness.
 
 Then open `notebooks/explore.ipynb` in JupyterLab to query the layers with DuckDB.
