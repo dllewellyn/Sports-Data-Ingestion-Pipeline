@@ -24,6 +24,14 @@ cd dbt/data_platform
 uv run --project ../.. dbt build --select stg_users          # one model + its tests
 uv run --project ../.. dbt test  --select dim_users_by_city  # tests only
 
+# Run dbt WITHOUT the live catalog, via a scratch file-backed DuckLake. When the
+# Docker `ducklake-catalog` (Postgres) is unreachable, point --profiles-dir at a
+# scratch profile whose `path:` is `ducklake:<dir>/catalog.ducklake` (a local FILE,
+# not Postgres) plus a schema-correct bronze fixture — this runs real materializations
+# and tests locally. Use `--threads 1` (threads>1 triggers a nondeterministic
+# `__dbt_tmp` catalog-qualification race on file-backed DuckLake) and keep it off
+# `warehouse.duckdb` (single-writer lock).
+
 # Lint + format (PEP 8). Both run automatically on commit via pre-commit.
 uv run ruff check --fix src
 uv run ruff format src
@@ -117,7 +125,11 @@ raw_users ──▶ silver/stg_users ──▶ gold/dim_users_by_city ──▶ 
   load-bearing. Note: switching
   `profiles.yml` `path:` to DuckLake changes the manifest `database` field from
   `warehouse` to `ducklake`; this does NOT affect AssetKey derivation (which uses
-  schema prefix only) — confirmed via `dagster definitions validate`.
+  schema prefix only) — confirmed via `dagster definitions validate`. When you
+  `--select` a subgraph whose `relationships` tests point at UNSELECTED tables, add
+  `--indirect-selection=empty` so dbt builds exactly the selected nodes — otherwise the
+  pulled-in neighbour test errors with `Table … does not exist`. This is graph-scoping,
+  NOT a gate bypass.
 - **Canonical match identity goes through the `canonical_match_id` dbt macro — never
   a provider event id.** `match_id` is `md5` over the *canonical resolved* natural
   key (canonical league_id, season_id, UTC kickoff date, seed-resolved home/away
@@ -147,7 +159,12 @@ raw_users ──▶ silver/stg_users ──▶ gold/dim_users_by_city ──▶ 
   via `read_parquet` + `UNION ALL`, keep-one on the id. ESPN is exempt — it conforms in SQL and is
   the union base. Do NOT write directly to DuckLake or create a separate canonical table (the
   link-table `relationships` test on `match_id → match.match_id` must stay passable, and direct
-  DuckLake writes reintroduce the second-writer problem).
+  DuckLake writes reintroduce the second-writer problem). This four-file bootstrap
+  applies to **still-scaffolded providers that mint nothing** too (e.g. football-data):
+  because `read_parquet` errors on a missing path, EVERY provider the `int_*` models
+  union must have its four files bootstrapped, not just providers with a live conform
+  body — so `matchbook_conform` bootstraps BOTH matchbook and football-data via
+  `bootstrap_additions_files` (the T038 fix; a scaffold provider still needs its empties).
 - **`league_aliases` seed maps each provider's league key onto the ESPN-anchored canonical `league_id`.**
   `dbt/data_platform/seeds/league_aliases.csv` — columns `league_id, canonical_name, provider,
   provider_key`. The natural key is the composite **`(provider, provider_key)`** and MUST be
