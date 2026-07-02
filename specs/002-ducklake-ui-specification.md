@@ -1,8 +1,20 @@
 # Spec 002 — DuckLake + DuckDB UI Integration
 
-**Status:** Draft
+**Status:** DuckLake — Delivered · DuckDB UI — **Removed (2026-07-02)**
 **Date:** 2026-06-29
 **Feature request:** Add DuckDB UI and DuckLake to all docker compose files. Integrate correctly so the project starts to become a fully fledged DuckDB data lake.
+
+> **⚠️ The DuckDB UI half of this spec was removed on 2026-07-02.** The `duckdb-ui`
+> compose service and `scripts/start_duckdb_ui.py` were deleted. The DuckDB Local
+> UI is a MotherDuck-hosted SPA that would not initialise reliably in a headless
+> container behind a reverse proxy (`Failed to resolve app state with user —
+> RangeError: Offset is outside the bounds of the DataView`), and it depends on a
+> third-party remote (`ui.duckdb.org`). Interactive querying of the DuckLake
+> catalog is served instead by the **JupyterLab** and **Streamlit** services and
+> the **DuckDB MCP inspector** (`investigations/duckdb-data-catalogue-mcp/`). The
+> **DuckLake** half of this spec (Postgres-backed catalog, `ducklake-catalog`
+> service) remains in place and is unaffected. The requirements below are retained
+> as the historical record of what was built.
 
 ---
 

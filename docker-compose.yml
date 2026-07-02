@@ -87,16 +87,6 @@ services:
       - sports-quant
     restart: unless-stopped
 
-  # DuckDB built-in web UI — query the DuckLake catalog interactively on :4213.
-  duckdb-ui:
-    <<: *app
-    depends_on:
-      ducklake-catalog:
-        condition: service_healthy
-    command: python scripts/start_duckdb_ui.py
-    ports:
-      - "${DUCKDB_UI_PORT:-4213}:4214"
-
   # PostgreSQL catalog for DuckLake. All overlays inherit this service.
   # Dev credentials — override POSTGRES_CATALOG_URL in .env for production.
   ducklake-catalog:
