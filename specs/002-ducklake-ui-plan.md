@@ -2,7 +2,11 @@
 
 **Spec:** `specs/002-ducklake-ui-specification.md`
 **Date:** 2026-06-29
-**Status:** Ready for implementation
+**Status:** DuckLake — Delivered · DuckDB UI — **Removed (2026-07-02)**
+
+> **⚠️ The DuckDB UI service was removed on 2026-07-02** (see the banner in the
+> spec). The `duckdb-ui` compose stanzas and `scripts/start_duckdb_ui.py` described
+> below no longer exist; the DuckLake portions of this plan remain in effect.
 
 ---
 

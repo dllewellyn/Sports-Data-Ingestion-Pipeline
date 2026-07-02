@@ -54,7 +54,8 @@ compose topology). It is therefore declared `related_specs: [001, 002]`.
 
 Note on later evolution: since these commits, the warehouse backing store was
 migrated from a plain DuckDB file to a **DuckLake** (Postgres-catalogued) profile,
-and the base compose gained DuckLake, a DuckDB-UI browser service, and a Matchbook
+and the base compose gained DuckLake, a DuckDB-UI browser service (since **removed
+on 2026-07-02** — see `specs/002-ducklake-ui-specification.md`), and a Matchbook
 ingestor service. Those are out of scope for this spec's source commits; where they
 touch behaviour described here they are flagged in §9 / §10. This spec describes the
 medallion foundation's *behaviour* (single-writer warehouse owned by dbt, Parquet at

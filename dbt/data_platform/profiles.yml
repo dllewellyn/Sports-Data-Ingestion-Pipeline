@@ -3,8 +3,34 @@ data_platform:
   outputs:
     dev:
       type: duckdb
-      path: "{{ env_var('DUCKDB_PATH', '/app/data/warehouse.duckdb') }}"
+      # Primary connection is IN-MEMORY on purpose. Every model, seed and test is
+      # routed to `+database: lake` (the DuckLake / Postgres catalog, see
+      # dbt_project.yml) and every source is external Parquet, so dbt never stores
+      # data in a warehouse.duckdb file. Pointing `path:` at a real file only bought
+      # us DuckDB's single-writer lock on that file: any overlap between dbt runs (a
+      # scheduled run + a manual one, a retry launched while the prior run's process
+      # lingers, the OOM-crashed process from a previous attempt) collided with
+      # "IO Error: Could not set lock on file warehouse.duckdb: Conflicting lock is
+      # held ...". `:memory:` removes that lock entirely — the shared state lives in
+      # DuckLake (Postgres-backed, concurrency-safe), not in a local file. Keep the
+      # `attach: lake` stanza: because `path:` is NOT a ducklake URI there is no
+      # double-attach (contrast the Spec 003 constraint about removing `attach:`).
+      path: ":memory:"
       threads: 4
+      # Bound DuckDB's memory and give it a disk spill dir so heavy sorts/aggregations
+      # (the stg_espn_events window + the intermediate table writes) go out-of-core
+      # instead of dying. DuckDB defaults memory_limit to 80% of the *host* RAM it
+      # detects — but on the shared home server (192.168.1.166, also running the
+      # SigNoz/ClickHouse stack) the OS can't actually hand over that much, so the
+      # allocation is refused ("Out of Memory Error: Allocation failure") before
+      # DuckDB ever decides to spill. Capping memory_limit below what the host can
+      # guarantee forces it to spill first. preserve_insertion_order=false cuts peak
+      # memory on large writes. All env-driven so a bigger box can raise the ceiling.
+      settings:
+        memory_limit: "{{ env_var('DUCKDB_MEMORY_LIMIT', '4GB') }}"
+        max_temp_directory_size: "{{ env_var('DUCKDB_MAX_TEMP_SIZE', '20GB') }}"
+        temp_directory: "{{ env_var('DATA_DIR', '/app/data') }}/.duckdb_tmp"
+        preserve_insertion_order: false
       extensions:
         - parquet
         - postgres
