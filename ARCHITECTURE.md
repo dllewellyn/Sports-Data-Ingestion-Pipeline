@@ -64,11 +64,9 @@ src/data_platform/              # The Dagster code location (all orchestration P
 │   └── asset_results.py                #   result/report dataclasses for asset metadata
 ├── espn/                       # ESPN soccer bronze source (mirrors football/)
 │   ├── registry.py season.py discovery.py http_client.py asset_results.py
-│   ├── ingest.py                       #   scoreboard JSON → bronze Parquet engine
-│   └── migrate_from_postgres.py        #   one-off historic backfill (§4b)
+│   └── ingest.py                       #   scoreboard JSON → bronze Parquet engine
 ├── matchbook/                  # Matchbook: events + odds + enrichment
 │   ├── ingest.py                       #   events REST API → bronze engine
-│   ├── migrate_from_postgres.py        #   one-off historic backfill (§4b)
 │   ├── t60.py                          #   T-60 favourite enrichment engine (§4b)
 │   └── ingestor/                       #   real-time Redis odds → Parquet daemon
 │       ├── direct_parquet_consumer.py  #     subscribe, dedup, buffer, flush
@@ -80,6 +78,10 @@ src/data_platform/              # The Dagster code location (all orchestration P
 │   ├── matchbook_scoring.py            #   fuzzy score + kickoff tolerance
 │   ├── matchbook_event_name.py         #   parse "Home vs Away"
 │   └── matchbook_overrides.py          #   load human-review decisions
+├── migrate/                    # One-off historic PostgreSQL → bronze backfill (§4b)
+│   ├── base.py                         #   shared validate-records + atomic-write flow
+│   ├── espn.py                         #   ESPN restored-summaries + cache → bronze Parquet
+│   └── matchbook.py                    #   Matchbook provider_match_cache → bronze Parquet
 ├── mcp/                        # MCP server: read-only lakehouse catalogue inspector
 │   └── inspector.py server.py __main__.py
 └── assets/                     # Dagster assets — thin wrappers over the engines above
@@ -174,7 +176,7 @@ definitions.py ──imports──▶ assets/*  ──imports──▶ football/
 | `conform/` | Symmetric cross-provider conform: per-provider modules (`matchbook.py`, `football_data.py`) resolve/link/mint via the shared `resolve.py` identity authority → four `<provider>_canonical_*_additions.parquet` + link/exception Parquet | `models`, `config` | write to DuckLake (§4b) |
 | `conform/resolve.py` | Shared identity authority: season→league→team→match id resolution (seed-first) reused by every provider | `config` | open a DuckLake connection |
 | `matchbook/t60.py` | Identify the pre-match favourite from odds ticks → Parquet | `config` | write to DuckLake |
-| `*/migrate_from_postgres.py` | One-off historic backfill from the legacy PostgreSQL → bronze Parquet | `models` | run on a schedule (§4b) |
+| `migrate/` | One-off historic backfill from the legacy PostgreSQL → bronze Parquet: per-provider engines (`espn.py`, `matchbook.py`) sharing the validate/write flow in `base.py` | `models` | run on a schedule (§4b) |
 | `mcp/` | Read-only lakehouse catalogue inspector (parses the dbt manifest) | `config` | mutate the warehouse |
 | `assets/ingestion/*` | Thin Dagster wrappers over the bronze engines | source packages, `models`, `config`, `otel` | depend on other assets |
 | `assets/intermediate/*` | Thin Dagster wrappers over conform + T-60 | `conform`, `matchbook`, `config` | reimplement transformation in Python |
@@ -206,7 +208,7 @@ detection), and consumption; everything else is dbt.
   market favourite from the odds ticks in the window 45–75 min before kickoff
   (lowest back price = shortest odds), resolve that runner to a team, and write
   `favourite_team_id` per match. `int_match` left-joins the result.
-- **Postgres migration** (`*/migrate_from_postgres.py`) — a **one-off** backfill
+- **Postgres migration** (`migrate/`) — a **one-off** backfill
   of historic ESPN/Matchbook records from the legacy sports-gaming-engine
   PostgreSQL into the same bronze Parquet format. Excluded from all schedules; run
   once. The only place migration data touches the live path is the T-60 dedup

@@ -24,12 +24,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
 import pandera.pandas as pa
 import psycopg2
-from pydantic import ValidationError
 
 from ..models.schemas import EspnEventRecord
+from .base import validate_records, write_frame_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -260,22 +259,12 @@ def run_espn_postgres_migration(
 
     for (league_slug, season_year), group_rows in sorted(groups.items()):
         try:
-            event_rows: list[dict] = []
-            failed = 0
-            for flat_row in group_rows:
-                try:
-                    EspnEventRecord.model_validate(flat_row)
-                    event_rows.append(flat_row)
-                except ValidationError as exc:
-                    failed += 1
-                    if log:
-                        log.warning(
-                            "espn migration: skipping invalid event_id=%s (%s/%s): %s",
-                            flat_row.get("espn_event_id"),
-                            league_slug,
-                            season_year,
-                            exc,
-                        )
+            event_rows, failed = validate_records(
+                group_rows,
+                EspnEventRecord,
+                log=log,
+                context=f"{league_slug}/{season_year}",
+            )
 
             if not event_rows:
                 report.skipped.append(
@@ -289,19 +278,13 @@ def run_espn_postgres_migration(
                 )
                 continue
 
-            df = pd.DataFrame(event_rows)
-            schema.validate(df)
-
             out_path = out_dir / league_slug / f"{season_year}.parquet"
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            tmp = out_path.with_suffix(".tmp")
-            df.to_parquet(tmp, index=False)
-            tmp.replace(out_path)
+            written = write_frame_atomic(event_rows, schema, out_path)
 
             if log:
                 log.info(
                     "espn migration: wrote %d rows → %s (skipped %d)",
-                    len(df),
+                    written,
                     out_path,
                     failed,
                 )

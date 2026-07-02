@@ -14,7 +14,7 @@ No ``from __future__ import annotations`` — Dagster introspects the annotation
 from dagster import AssetKey, MaterializeResult, asset
 
 from ...config import settings
-from ...espn.migrate_from_postgres import MigrationReport, run_espn_postgres_migration
+from ...migrate.espn import MigrationReport, run_espn_postgres_migration
 from ...models.validation import espn_bronze_schema
 
 

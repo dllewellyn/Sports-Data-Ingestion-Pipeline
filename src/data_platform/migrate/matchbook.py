@@ -19,12 +19,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
 import pandera.pandas as pa
 import psycopg2
-from pydantic import ValidationError
 
 from ..models.schemas import MatchbookEventRecord
+from .base import validate_records, write_frame_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -171,12 +170,14 @@ def run_matchbook_postgres_migration(
 
     for sport_name, sport_rows in by_sport.items():
         try:
-            event_rows: list[dict] = []
-            failed = 0
+            # Flatten each row first; an unmapped sport / missing kickoff yields None
+            # and is skipped-and-counted before Pydantic validation.
+            candidates: list[dict] = []
+            skipped_at_flatten = 0
             for row in sport_rows:
                 flat = _to_event_dict(row, ingested_at=ingested_at)
                 if flat is None:
-                    failed += 1
+                    skipped_at_flatten += 1
                     if log:
                         log.warning(
                             "migration: skipping event_id=%s "
@@ -185,17 +186,12 @@ def run_matchbook_postgres_migration(
                             row.get("sport"),
                         )
                     continue
-                try:
-                    MatchbookEventRecord.model_validate(flat)
-                    event_rows.append(flat)
-                except ValidationError as exc:
-                    failed += 1
-                    if log:
-                        log.warning(
-                            "migration: skipping invalid event_id=%s: %s",
-                            flat.get("event_id"),
-                            exc,
-                        )
+                candidates.append(flat)
+
+            event_rows, failed_validation = validate_records(
+                candidates, MatchbookEventRecord, log=log, context=sport_name
+            )
+            failed = skipped_at_flatten + failed_validation
 
             if not event_rows:
                 if log:
@@ -207,19 +203,13 @@ def run_matchbook_postgres_migration(
                 )
                 continue
 
-            df = pd.DataFrame(event_rows)
-            schema.validate(df)
-
             out_path = out_dir / sport_name / run_date / f"migration_{batch_ts}.parquet"
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            tmp = out_path.with_suffix(".tmp")
-            df.to_parquet(tmp, index=False)
-            tmp.replace(out_path)
+            written = write_frame_atomic(event_rows, schema, out_path)
 
             if log:
                 log.info(
                     "migration: wrote %d rows for sport=%s to %s (skipped %d)",
-                    len(df),
+                    written,
                     sport_name,
                     out_path,
                     failed,
