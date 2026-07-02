@@ -1,11 +1,20 @@
 #!/usr/bin/env python3
 """Start the DuckDB built-in web UI connected to the DuckLake catalog.
 
-start_ui() binds only to localhost inside the container. A lightweight
-TCP proxy (Python socketserver) forwards 0.0.0.0:4213 -> localhost:4213
-so the UI is reachable from outside via Docker's port mapping.
+start_ui() binds the UI's HTTP server to localhost inside the container (there is
+no host/bind-address setting — only `ui_local_port`), so Docker's port mapping,
+which forwards from the container's external interface, can't reach it directly.
+A small TCP relay forwards 0.0.0.0:4214 -> localhost:4213 to bridge that gap; the
+compose port mapping exposes 4214 on the host.
+
+The relay uses one blocking pump thread per direction per connection. That handles
+what a browser actually does — many parallel keep-alive connections plus the UI's
+long-lived backend polling channel — which the previous single non-blocking
+busy-loop could not (it served one sequential request fine but spun/stalled under
+real concurrency, leaving the UI a blank white screen).
 """
 
+import contextlib
 import os
 import socket
 import socketserver
@@ -17,38 +26,48 @@ import duckdb
 POSTGRES_CATALOG_URL = os.environ["POSTGRES_CATALOG_URL"]
 DUCKDB_UI_INTERNAL_PORT = 4213
 PROXY_PORT = 4214  # exposed by Docker on the host as 4213
+BUF = 65536
+
+
+def _pump(src: socket.socket, dst: socket.socket) -> None:
+    """Copy bytes src -> dst until EOF, then half-close dst's write side so the
+    peer sees the end of stream. Blocking; no busy-loop."""
+    try:
+        while True:
+            data = src.recv(BUF)
+            if not data:
+                break
+            dst.sendall(data)
+    except OSError:
+        pass
+    finally:
+        with contextlib.suppress(OSError):
+            dst.shutdown(socket.SHUT_WR)
 
 
 class _ForwardHandler(socketserver.BaseRequestHandler):
     def handle(self) -> None:
         try:
-            with socket.create_connection(("localhost", DUCKDB_UI_INTERNAL_PORT)) as srv:
-                self.request.setblocking(False)
-                srv.setblocking(False)
-                while True:
-                    try:
-                        data = self.request.recv(4096)
-                        if data:
-                            srv.sendall(data)
-                        else:
-                            break
-                    except BlockingIOError:
-                        pass
-                    try:
-                        data = srv.recv(4096)
-                        if data:
-                            self.request.sendall(data)
-                        elif data == b"":
-                            break
-                    except BlockingIOError:
-                        pass
-        except Exception:
-            pass
+            upstream = socket.create_connection(("localhost", DUCKDB_UI_INTERNAL_PORT))
+        except OSError:
+            return
+        with upstream:
+            client = self.request
+            # This handler already runs in its own thread; spawn one more for the
+            # reverse direction and pump the forward direction here.
+            reverse = threading.Thread(target=_pump, args=(upstream, client), daemon=True)
+            reverse.start()
+            _pump(client, upstream)
+            reverse.join()
+
+
+class _ProxyServer(socketserver.ThreadingTCPServer):
+    allow_reuse_address = True
+    daemon_threads = True
 
 
 def _start_proxy() -> None:
-    with socketserver.ThreadingTCPServer(("0.0.0.0", PROXY_PORT), _ForwardHandler) as srv:
-        srv.allow_reuse_address = True
+    with _ProxyServer(("0.0.0.0", PROXY_PORT), _ForwardHandler) as srv:
         srv.serve_forever()
 
 
