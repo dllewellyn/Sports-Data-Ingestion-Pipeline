@@ -75,6 +75,7 @@ investigations/*/evidence/samples/
 # Agent worktrees (ephemeral)
 .agents/worktrees/
 .claude/worktrees/
+dark-factory/.agents/worktrees/
 
 # OS
 .DS_Store
