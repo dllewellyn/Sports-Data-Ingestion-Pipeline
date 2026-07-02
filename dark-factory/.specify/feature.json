@@ -1,8 +1,8 @@
 {
-  "feature_directory": "specs/012-cross-provider-conform",
+  "feature_directory": "specs/013-bidirectional-identity-reconciliation",
   "telemetry": {
-    "run_id": "20260701T183910Z-a08864",
-    "trace_id": "6aa73e04ae23212f639b5caf7c25f748",
-    "started_at_ns": 1782931150641897000
+    "run_id": "20260701T135523Z-8fc453",
+    "trace_id": "e9b8923523abb8bfd01c030589ef4d4c",
+    "started_at_ns": 1782914123707631000
   }
 }
